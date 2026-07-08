@@ -12,7 +12,7 @@ use crate::agents::classification::{classify, ClassifyResult};
 use crate::policy::{DetectorConfig, DetectorStore};
 use crate::agents::embedding::client::generate_embedding;
 use crate::agents::embedding::semantic_search;
-use crate::pipeline_types::{LayerResult, MultiTurnCacheParams, ScanSummary, SemanticMatch, TraceStage};
+use crate::pipeline_types::{DetectorEvaluated, LayerResult, MultiTurnCacheParams, ScanSummary, SemanticMatch, TraceStage};
 
 use regex::Regex;
 use reqwest::Client;
@@ -27,6 +27,22 @@ fn has_word_boundary_match(text: &str, keyword: &str) -> bool {
         |_| text.contains(keyword),
         |re| re.is_match(text),
     )
+}
+
+/// Build the `detectors_evaluated` list from active detectors and the scan result.
+/// Each detector gets outcome "hit" if it matches the winning detector name, "pass" otherwise.
+fn build_detectors_evaluated(detectors: &[&DetectorConfig], hit: &LayerResult) -> Vec<DetectorEvaluated> {
+    let winner = match hit {
+        LayerResult::Hit { detector, .. } => Some(detector.as_str()),
+        LayerResult::Safe => None,
+    };
+    detectors.iter().map(|d| DetectorEvaluated {
+        id:           d.id.clone(),
+        name:         d.name.clone(),
+        framework_id: d.framework_id.clone(),
+        mode:         d.mode.clone(),
+        outcome:      if winner == Some(d.name.as_str()) { "hit".to_string() } else { "pass".to_string() },
+    }).collect()
 }
 
 macro_rules! pipeline_info {
@@ -91,6 +107,12 @@ pub async fn scan_pipeline(
         _ => LayerResult::Safe,
     };
 
+    let kw_detectors_evaluated: Option<Vec<DetectorEvaluated>> = if active_refs.is_empty() {
+        Some(Vec::new())
+    } else {
+        Some(build_detectors_evaluated(&active_refs, &kw_result))
+    };
+
     match &kw_result {
         LayerResult::Hit { detector, mode, .. } if mode == "block" => {
             pipeline_info!(
@@ -107,6 +129,7 @@ pub async fn scan_pipeline(
                 detector:   Some(detector.clone()),
                 enforced:   Some(true),
                 would_block: Some(true),
+                detectors_evaluated: kw_detectors_evaluated.clone(),
                 ..Default::default()
             });
             // Skip stages 2a and 2b — return block immediately
@@ -141,6 +164,7 @@ pub async fn scan_pipeline(
                 detector:   Some(detector.clone()),
                 enforced:   Some(false),
                 would_block: Some(false),
+                detectors_evaluated: kw_detectors_evaluated.clone(),
                 ..Default::default()
             });
         }
@@ -156,6 +180,7 @@ pub async fn scan_pipeline(
                 detector:   Some(detector.clone()),
                 enforced:   Some(false),
                 would_block: Some(false),
+                detectors_evaluated: kw_detectors_evaluated.clone(),
                 ..Default::default()
             });
         }
@@ -167,6 +192,7 @@ pub async fn scan_pipeline(
                 stage:    "keyword_regex".to_string(),
                 decision: "pass".to_string(),
                 ms:       kw_ms,
+                detectors_evaluated: kw_detectors_evaluated.clone(),
                 ..Default::default()
             });
         }

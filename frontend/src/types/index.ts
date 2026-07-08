@@ -155,6 +155,14 @@ export interface PipelineTrace {
   stages: PipelineStage[];
 }
 
+export interface DetectorEvaluated {
+  id: string;
+  name: string;
+  framework_id: string;
+  mode: string;
+  outcome: 'pass' | 'hit';
+}
+
 export interface PipelineStage {
   stage: string;
   decision: string;
@@ -167,6 +175,7 @@ export interface PipelineStage {
   provider?: string;
   category?: string;
   reason?: string;
+  detectors_evaluated?: DetectorEvaluated[];
 }
 
 export interface TweakValues {

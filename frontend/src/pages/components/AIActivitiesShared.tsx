@@ -136,10 +136,12 @@ export function classificationFeedbackCell(row: TrafficRow): React.ReactNode {
 
 // ── Detector list (detectors tab) ────────────────────────────────────────────
 
-import type { UIDetector } from '../../api/detectors'
+export function DetectorList({ row }: { row: TrafficRow }) {
+  const stages = row.pipelineTrace?.stages ?? []
 
-export function DetectorList({ row, detectors }: { row: TrafficRow; detectors: UIDetector[] }) {
-  const hitName  = row.detector || null
+  const evaluatedRows = stages.flatMap(s =>
+    (s.detectors_evaluated ?? []).map(d => ({ ...d, stage: s.stage }))
+  )
 
   if (!row.pipelineTrace) {
     return (
@@ -151,8 +153,21 @@ export function DetectorList({ row, detectors }: { row: TrafficRow; detectors: U
     )
   }
 
-  if (detectors.length === 0) {
-    return <div className="caption" style={{ padding: '24px 0', textAlign: 'center', color: 'var(--fg-tertiary)' }}>No detector data available</div>
+  if (evaluatedRows.length === 0 && !stages.some(s => s.detectors_evaluated)) {
+    return (
+      <div className="caption" style={{ padding: '24px 0', textAlign: 'center', color: 'var(--fg-tertiary)' }}>
+        Per-detector results not recorded for this request.
+      </div>
+    )
+  }
+
+  const explicitEmpty = stages.some(s => s.detectors_evaluated && s.detectors_evaluated.length === 0)
+  if (explicitEmpty && evaluatedRows.length === 0) {
+    return (
+      <div className="caption" style={{ padding: '24px 0', textAlign: 'center', color: 'var(--fg-tertiary)' }}>
+        No detector rules selected for this app — 0 detectors evaluated.
+      </div>
+    )
   }
 
   return (
@@ -161,37 +176,28 @@ export function DetectorList({ row, detectors }: { row: TrafficRow; detectors: U
         <thead>
           <tr>
             <th>Detector</th>
-            <th>Category</th>
+            <th>Framework</th>
             <th>Mode</th>
             <th>Outcome</th>
           </tr>
         </thead>
         <tbody>
-          {detectors.map(d => {
-            const isHit = d.name === hitName
-            return (
-              <tr key={d.id} style={isHit ? { background: 'var(--danger-bg)' } : {}}>
-                <td className="mono" style={{ fontSize: 11 }}>{d.name}</td>
-                <td>
-                  {d.category
-                    ? <Chip kind="warn" mono>{d.category}</Chip>
-                    : d.frameworkIds.length > 0
-                      ? <span style={{ fontSize: 11, color: 'var(--fg-tertiary)' }}>LLM</span>
-                      : <span style={{ color: 'var(--fg-tertiary)' }}>—</span>}
-                </td>
-                <td>
-                  <span style={{ fontSize: 10, color: d.mode === 'block' ? 'var(--danger)' : 'var(--warning, #D9A32E)', fontWeight: 600, textTransform: 'uppercase' }}>
-                    {d.mode}
-                  </span>
-                </td>
-                <td>
-                  {isHit
-                    ? <Chip kind="err" dot>hit</Chip>
-                    : <Chip kind="ok" dot>pass</Chip>}
-                </td>
-              </tr>
-            )
-          })}
+          {evaluatedRows.map(d => (
+            <tr key={d.id} style={d.outcome === 'hit' ? { background: 'var(--danger-bg)' } : {}}>
+              <td className="mono" style={{ fontSize: 11 }}>{d.name}</td>
+              <td>{d.framework_id ? <Chip kind="warn" mono>{d.framework_id}</Chip> : <span style={{ color: 'var(--fg-tertiary)' }}>—</span>}</td>
+              <td>
+                <span style={{ fontSize: 10, color: d.mode === 'block' ? 'var(--danger)' : 'var(--warning, #D9A32E)', fontWeight: 600, textTransform: 'uppercase' }}>
+                  {d.mode}
+                </span>
+              </td>
+              <td>
+                {d.outcome === 'hit'
+                  ? <Chip kind="err" dot>hit</Chip>
+                  : <Chip kind="ok" dot>pass</Chip>}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

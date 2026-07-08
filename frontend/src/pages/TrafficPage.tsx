@@ -8,8 +8,6 @@ import { Download, Pause, Play, Filter, AlertTri } from '../components/ui/Icons'
 import { getTrafficLogs, getTrafficStats, type TrafficStats } from '../api/logs'
 import { createIncident } from '../api/incidents'
 import { getApps } from '../api/apps'
-import { getDetectors } from '../api/detectors'
-import type { UIDetector } from '../api/detectors'
 import type { App, PipelineTrace, TweakValues, TrafficRow } from '../types'
 import { ThreatKnowledgeTab } from './components/AIActivitiesShared'
 import { ScannerBadge } from '../components/ui'
@@ -18,19 +16,13 @@ interface TrafficPageProps {
   tweaks: TweakValues;
 }
 
-function DetectorList({ req, detectors }: { req: TrafficRow; detectors: UIDetector[] }) {
-  const threatDetector = req.flag && req.threat ? req.threat.detector : null
-  const threatFramework = req.flag && req.threat ? req.threat.framework_id : null
+function DetectorList({ req }: { req: TrafficRow }) {
+  const stages = req.pipelineTrace?.stages ?? []
 
-  function hashName(name: string): number {
-    let h = 0
-    for (let i = 0; i < name.length; i++) {
-      h = ((h << 5) - h) | 0
-      const c = name.charCodeAt(i)
-      h |= (c & 0x1f)
-    }
-    return Math.abs(h) % 20 + 3
-  }
+  // Collect all detectors_evaluated entries from pipeline stages
+  const evaluatedRows = stages.flatMap(s =>
+    (s.detectors_evaluated ?? []).map(d => ({ ...d, stage: s.stage }))
+  )
 
   if (!req.pipelineTrace) {
     return (
@@ -40,25 +32,38 @@ function DetectorList({ req, detectors }: { req: TrafficRow; detectors: UIDetect
     )
   }
 
-  const all = (detectors ?? []).map(d => ({
-    name: d.name,
-    owasp: d.owaspCodes?.[0] ?? null,
-    outcome: (req.flag && d.owaspCodes?.[0] === threatFramework && d.name === threatDetector) ? "hit" : "pass",
-    ms: hashName(d.name),
-  }))
+  // No stages had detectors_evaluated — pre-gateway-change log
+  if (evaluatedRows.length === 0 && !stages.some(s => s.detectors_evaluated)) {
+    return (
+      <div className="caption" style={{ padding: 14 }}>
+        Per-detector results not recorded for this request.
+      </div>
+    )
+  }
+
+  // Explicitly empty array — app has detectors_custom with no selections
+  const explicitEmpty = stages.some(s => s.detectors_evaluated && s.detectors_evaluated.length === 0)
+  if (explicitEmpty && evaluatedRows.length === 0) {
+    return (
+      <div className="caption" style={{ padding: 14 }}>
+        No detector rules selected for this app — 0 detectors evaluated.
+      </div>
+    )
+  }
+
   return (
     <div className="t-wrap">
       <table className="t" style={{ fontSize: 12 }}>
         <thead>
-          <tr><th>detector</th><th>OWASP</th><th>outcome</th><th className="r">latency</th></tr>
+          <tr><th>detector</th><th>framework</th><th>mode</th><th>outcome</th></tr>
         </thead>
         <tbody>
-          {all.map(d => (
-            <tr key={d.name}>
+          {evaluatedRows.map(d => (
+            <tr key={d.id} style={d.outcome === "hit" ? { background: 'var(--danger-bg)' } : {}}>
               <td className="mono">{d.name}</td>
-              <td><OwaspPill id={d.owasp} /></td>
-              <td>{d.outcome === "hit" ? <Chip kind="err" dot>{d.outcome}</Chip> : <Chip kind="ok" dot>{d.outcome}</Chip>}</td>
-              <td className="r mono">{d.ms} ms</td>
+              <td>{d.framework_id ? <OwaspPill id={d.framework_id} /> : <span className="caption">—</span>}</td>
+              <td><span style={{ fontSize: 10, color: d.mode === 'block' ? 'var(--danger)' : 'var(--warning)', fontWeight: 600, textTransform: 'uppercase' }}>{d.mode}</span></td>
+              <td>{d.outcome === "hit" ? <Chip kind="err" dot>hit</Chip> : <Chip kind="ok" dot>pass</Chip>}</td>
             </tr>
           ))}
         </tbody>
@@ -247,7 +252,7 @@ function IncidentModal({ req, onClose, onCreated }: { req: TrafficRow; onClose: 
   )
 }
 
-function RequestDrawer({ req, open, onClose, onOpenIncident, detectors }: { req: TrafficRow; open?: boolean; onClose: () => void; onOpenIncident?: () => void; detectors: UIDetector[] }) {
+function RequestDrawer({ req, open, onClose, onOpenIncident }: { req: TrafficRow; open?: boolean; onClose: () => void; onOpenIncident?: () => void }) {
   const [activeTab, setActiveTab] = React.useState("overview")
   const frameworks = useFrameworks()
 
@@ -334,9 +339,17 @@ function RequestDrawer({ req, open, onClose, onOpenIncident, detectors }: { req:
               <div className="card" style={{ padding: 14, borderColor: "var(--accent)", background: "var(--success-bg)" }}>
                 <div className="row-tight">
                   <ShieldCheck w={16} style={{ color: "var(--accent)" }} />
-                  <span style={{ fontWeight: 600 }}>Allowed · {req.pipelineTrace.stages.length} detectors checked</span>
+                  <span style={{ fontWeight: 600 }}>Allowed · {req.pipelineTrace.stages.length} layer{req.pipelineTrace.stages.length !== 1 ? 's' : ''} checked</span>
                 </div>
-                <div className="caption" style={{ marginTop: 6 }}>No matches across LLM01–LLM10 detectors. Output passed PII and secrets scans.</div>
+                <div className="caption" style={{ marginTop: 6 }}>
+                  {(() => {
+                    const stageNames: Record<string, string> = { keyword_regex: 'keyword', semantic: 'semantic', llm_classify: 'classifier', t2_intent_analysis: 'T2 intent', cache_lookup: 'cache' }
+                    const present = req.pipelineTrace!.stages.filter(s => s.decision !== 'skipped' && s.stage !== 'cache_lookup').map(s => stageNames[s.stage] ?? s.stage)
+                    if (present.length === 0) return 'No scan layers were active for this request.'
+                    const last = present.pop()!
+                    return `No matches across ${present.length ? present.join(', ') + ' and ' : ''}${last} layers. Forwarded to upstream.`
+                  })()}
+                </div>
               </div>
             ) : (
               <div className="card" style={{ padding: 14, borderColor: "var(--border-subtle)", background: "var(--bg-secondary)" }}>
@@ -369,7 +382,7 @@ function RequestDrawer({ req, open, onClose, onOpenIncident, detectors }: { req:
           </>
         )}
 
-        {activeTab === "detectors" && <DetectorList req={req} detectors={detectors} />}
+        {activeTab === "detectors" && <DetectorList req={req} />}
         {activeTab === "timeline" && <TimelineList req={req} />}
         {activeTab === "threatknowledge" && <ThreatKnowledgeTab row={req} />}
         {activeTab === "content-quality" && <ContentQualityTab req={req} />}
@@ -402,7 +415,6 @@ const TrafficPageContent: React.FC<TrafficPageProps> = () => {
   const [filterApps, setFilterApps] = React.useState<App[]>([])
   const [columns, setColumns] = React.useState(COLUMN_DEFS)
   const [showColumnMenu, setShowColumnMenu] = React.useState(false)
-  const [detectors, setDetectors] = React.useState<UIDetector[]>([])
   const [stats, setStats] = React.useState<TrafficStats | null>(null)
   const [statsLoading, setStatsLoading] = React.useState(true)
 
@@ -410,7 +422,6 @@ const TrafficPageContent: React.FC<TrafficPageProps> = () => {
   React.useEffect(() => {
     getTrafficLogs({ limit: 50 }).then(r => setRows(r.rows)).catch(console.error)
     getApps().then(setFilterApps).catch(console.error)
-    getDetectors().then(r => setDetectors(Array.isArray(r.data) ? r.data : [])).catch(console.error)
   }, [])
 
   React.useEffect(() => {
@@ -606,7 +617,7 @@ const TrafficPageContent: React.FC<TrafficPageProps> = () => {
         </div>
       </div>
 
-      {selected && <RequestDrawer req={selected} onClose={() => setSelected(null)} onOpenIncident={() => setIncidentModal(selected)} detectors={detectors ?? []} />}
+      {selected && <RequestDrawer req={selected} onClose={() => setSelected(null)} onOpenIncident={() => setIncidentModal(selected)} />}
       {incidentModal && <IncidentModal req={incidentModal} onClose={() => setIncidentModal(null)} onCreated={() => { setIncidentModal(null); setSelected(null) }} />}
     </div>
   )

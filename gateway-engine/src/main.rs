@@ -1,8 +1,8 @@
 #![allow(clippy::too_many_arguments)]
 
 use axum::{
-    extract::{ConnectInfo, Request as AxumRequest, State},
-    http::StatusCode,
+    extract::{ConnectInfo, Path, Request as AxumRequest, State},
+    http::{HeaderMap, StatusCode},
     response::Response,
     routing::{get, post},
     Router,
@@ -235,25 +235,109 @@ async fn health(state: State<GatewayState>) -> Response {
     resp
 }
 
-async fn list_models(state: State<GatewayState>) -> Response {
+async fn list_models(
+    state: State<GatewayState>,
+    headers: HeaderMap,
+) -> Response {
     let now_unix = chrono::Utc::now().timestamp();
-    let providers = state.policy_store.providers_by_id.read().unwrap_or_else(|e| e.into_inner());
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut models: Vec<serde_json::Value> = Vec::new();
-    for p in providers.values() {
-        let id = p.model.clone().unwrap_or_else(|| p.name.clone());
-        if seen.insert(id.clone()) {
-            models.push(serde_json::json!({
-                "id": id,
-                "object": "model",
-                "created": now_unix,
-                "owned_by": p.vendor,
-            }));
+
+    let auth_result = state.auth_service.authenticate(&headers);
+    let auth = match auth_result {
+        Ok(a) => a,
+        Err(AuthError::MissingKey) => {
+            return json_response(
+                StatusCode::UNAUTHORIZED,
+                r#"{"error":"API key required. Provide Authorization: Bearer <key>"}"#,
+            );
         }
-    }
+        Err(AuthError::InvalidKey) => {
+            return json_response(
+                StatusCode::UNAUTHORIZED,
+                r#"{"error":"Invalid or inactive API key"}"#,
+            );
+        }
+    };
+
+    let models: Vec<serde_json::Value> = match auth.primary_provider_id {
+        Some(ref pid) => {
+            match state.policy_store.resolve_provider(pid) {
+                Some(p) => {
+                    let id = p.model.clone().unwrap_or_else(|| p.name.clone());
+                    vec![serde_json::json!({
+                        "id": id,
+                        "object": "model",
+                        "created": now_unix,
+                        "owned_by": p.vendor,
+                    })]
+                }
+                None => vec![],
+            }
+        }
+        None => vec![],
+    };
+
     let body = serde_json::json!({
         "object": "list",
         "data": models,
+    });
+    json_response(StatusCode::OK, &body.to_string())
+}
+
+async fn model_detail(
+    state: State<GatewayState>,
+    headers: HeaderMap,
+    Path(model_id): Path<String>,
+) -> Response {
+    let now_unix = chrono::Utc::now().timestamp();
+
+    let auth_result = state.auth_service.authenticate(&headers);
+    let auth = match auth_result {
+        Ok(a) => a,
+        Err(AuthError::MissingKey) => {
+            return json_response(
+                StatusCode::UNAUTHORIZED,
+                r#"{"error":"API key required. Provide Authorization: Bearer <key>"}"#,
+            );
+        }
+        Err(AuthError::InvalidKey) => {
+            return json_response(
+                StatusCode::UNAUTHORIZED,
+                r#"{"error":"Invalid or inactive API key"}"#,
+            );
+        }
+    };
+
+    match auth.primary_provider_id {
+        Some(ref pid) => {
+            if let Some(p) = state.policy_store.resolve_provider(pid) {
+                let id = p.model.clone().unwrap_or_else(|| p.name.clone());
+                if id == model_id {
+                    let body = serde_json::json!({
+                        "id": id,
+                        "object": "model",
+                        "created": now_unix,
+                        "owned_by": p.vendor,
+                    });
+                    return json_response(StatusCode::OK, &body.to_string());
+                }
+            }
+        }
+        None => {}
+    }
+
+    json_response(
+        StatusCode::NOT_FOUND,
+        &serde_json::json!({
+            "error": { "message": format!("Model '{}' not found", model_id), "type": "not_found", "code": "model_not_found" }
+        }).to_string(),
+    )
+}
+
+async fn version(state: State<GatewayState>) -> Response {
+    let body = serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "instance_id": state.gateway_instance_id,
+        "server": "ai-firewall-gateway",
     });
     let mut resp = Response::new(body.to_string().into());
     *resp.status_mut() = StatusCode::OK;
@@ -803,6 +887,8 @@ async fn main() {
         .route("/v1/test/classification", post(test_classification))
         .route("/v1/scan", post(scan))
         .route("/v1/cq_scan", post(cq_scan))
+        .route("/version", get(version))
+        .route("/v1/models/:model", get(model_detail))
         .route("/health", get(health))
         .route("/reload", post(reload))
         .route("/cache/flush", post(cache_flush))

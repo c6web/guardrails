@@ -75,6 +75,16 @@ pub struct SemanticMatch {
     pub similarity: f32, // cosine similarity [0..1], scaled to percentage in UI
 }
 
+/// Single detector result within a pipeline stage.
+#[derive(Clone, Debug, Serialize)]
+pub struct DetectorEvaluated {
+    pub id:           String,
+    pub name:         String,
+    pub framework_id: String,
+    pub mode:         String,
+    pub outcome:      String, // "pass" | "hit"
+}
+
 /// A single stage entry in the pipeline trace, serialized to the pipeline_trace JSONB column.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct TraceStage {
@@ -97,6 +107,8 @@ pub struct TraceStage {
     pub enforced: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub would_block: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detectors_evaluated: Option<Vec<DetectorEvaluated>>,
 }
 
 /// Result from a single layer scan.

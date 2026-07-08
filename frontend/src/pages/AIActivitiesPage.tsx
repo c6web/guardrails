@@ -3,8 +3,7 @@ import { RefreshCw, ChevronR, DatabaseRi, Trash2 } from '../components/ui/Icons'
 import { getTrafficLogs, getTrafficStats, deleteTrafficLogsBefore, deleteAllTrafficLogs, type TrafficStats } from '../api/logs'
 import { deleteTrafficLog, bulkDeleteTrafficLogs } from '../api/logs'
 import { getApps } from '../api/apps'
-import { getDetectors } from '../api/detectors'
-import type { UIDetector } from '../api/detectors'
+
 import { getAllDetectionFrameworks } from '../api/detectionFrameworks'
 import type { TrafficRow, TweakValues, App } from '../types'
 import { fmtAgeFromTs, fmtDateTime } from '../utils/format'
@@ -31,7 +30,7 @@ const AIActivitiesPage: React.FC<AIActivitiesPageProps> = () => {
   const [totalPages, setTotalPages] = React.useState(1)
   const [total, setTotal]       = React.useState(0)
   const [apps, setApps]         = React.useState<App[]>([])
-  const [detectors, setDetectors] = React.useState<UIDetector[]>([])
+
   const [frameworks, setFrameworks] = React.useState<{ id: string; name: string; framework_code: string }[]>([])
 
   const [appFilter, setAppFilter]         = React.useState('')
@@ -67,7 +66,6 @@ const AIActivitiesPage: React.FC<AIActivitiesPageProps> = () => {
 
   React.useEffect(() => {
     getApps().then(setApps).catch(() => {})
-    getDetectors().then(res => setDetectors(res.data)).catch(() => {})
     getAllDetectionFrameworks({ limit: 50 }).then(r => setFrameworks(r.data.map((f: { id: string; name: string; framework_code: string }) => ({ id: f.id, name: f.name, framework_code: f.framework_code })))).catch(() => {})
   }, [])
 
@@ -355,7 +353,6 @@ const AIActivitiesPage: React.FC<AIActivitiesPageProps> = () => {
       {selectedRow && (
         <RowDetail
           row={selectedRow}
-          detectors={detectors}
           onClose={() => setSelectedRow(null)}
           onDelete={hasViewerOrAbove ? () => { setDeleteTarget(selectedRow.id); setSelectedRow(null) } : undefined}
           onUpdateClassification={(id, correct, reason) => {

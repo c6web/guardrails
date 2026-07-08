@@ -4,7 +4,6 @@ import { setClassificationFeedback } from '../../api/logs'
 import { getToolAudit } from '../../api/tools'
 import type { ToolAuditRow } from '../../api/tools'
 import type { TrafficRow } from '../../types'
-import type { UIDetector } from '../../api/detectors'
 import { fmtDateTime, fmtDateTimeStr } from '../../utils/format'
 import { Drawer, LoadingState, OwaspPill, ShieldCheck, Chip, KV, Tabs } from '../../components/ui'
 import JsonPayload from '../../components/ui/JsonPayload'
@@ -13,13 +12,12 @@ import { ScannerBadge } from '../../components/ui'
 
 // ── Detail drawer ─────────────────────────────────────────────────────────────
 
-export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification, detectors }: {
+export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification }: {
   row: TrafficRow
   open?: boolean
   onClose: () => void
   onDelete?: () => void
   onUpdateClassification?: (id: string, correct: boolean | null, reason: string) => void
-  detectors: UIDetector[]
 }) {
   const [activeTab, setActiveTab] = React.useState('overview')
   const [showFeedbackModal, setShowFeedbackModal] = React.useState(false)
@@ -152,11 +150,17 @@ export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification
               <div className="card" style={{ padding: 14, borderColor: 'var(--accent)', background: 'var(--success-bg)', marginBottom: 16 }}>
                 <div className="row-tight">
                   <ShieldCheck w={15} style={{ color: 'var(--accent)' }} />
-                  <span style={{ fontWeight: 600 }}>Allowed · {row.pipelineTrace.stages.length} detector{row.pipelineTrace.stages.length !== 1 ? 's' : ''} checked</span>
+                  <span style={{ fontWeight: 600 }}>Allowed · {row.pipelineTrace.stages.length} layer{row.pipelineTrace.stages.length !== 1 ? 's' : ''} checked</span>
                 </div>
                 <div className="caption" style={{ marginTop: 4 }}>
-                  No matches across keyword, semantic, and classifier layers.
-                  {row.upstreamProviderName && ` Forwarded to ${row.upstreamProviderName}.`}
+                  {(() => {
+                    const stageNames: Record<string, string> = { keyword_regex: 'keyword', semantic: 'semantic', llm_classify: 'classifier', t2_intent_analysis: 'T2 intent', cache_lookup: 'cache' }
+                    const present = row.pipelineTrace!.stages.filter(s => s.decision !== 'skipped' && s.stage !== 'cache_lookup').map(s => stageNames[s.stage] ?? s.stage)
+                    if (present.length === 0) return 'No scan layers were active for this request.'
+                    const last = present.pop()!
+                    const layers = present.length ? present.join(', ') + ' and ' : ''
+                    return `No matches across ${layers}${last} layers.${row.upstreamProviderName ? ` Forwarded to ${row.upstreamProviderName}.` : ''}`
+                  })()}
                 </div>
               </div>
             ) : (
@@ -227,7 +231,7 @@ export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification
         )}
 
         {/* ── Detectors ── */}
-        {activeTab === 'detectors' && <DetectorList row={row} detectors={detectors} />}
+        {activeTab === 'detectors' && <DetectorList row={row} />}
 
         {/* ── Timeline ── */}
         {activeTab === 'timeline' && <TimelineList row={row} />}

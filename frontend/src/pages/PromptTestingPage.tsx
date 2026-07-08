@@ -521,7 +521,14 @@ export default function PromptTestingPage() {
                           <span style={{ fontWeight: 600 }}>Allowed · scan pipeline clear</span>
                         </div>
                         <div className="caption" style={{ marginTop: 4 }}>
-                          No matches across keyword, semantic, classifier, and intent-analysis layers.
+                          {(() => {
+                            const stageNames: Record<string, string> = { keyword_regex: 'keyword', semantic: 'semantic', llm_classify: 'classifier', t2_intent_analysis: 'T2 intent', cache_lookup: 'cache' }
+                            const present = (scanResult?.trace?.stages ?? []).filter(s => s.decision !== 'skipped' && s.stage !== 'cache_lookup').map(s => stageNames[s.stage] ?? s.stage)
+                            if (present.length === 0) return 'No scan layers were active for this request.'
+                            const last = present.pop()!
+                            const layers = present.length ? present.join(', ') + ' and ' : ''
+                            return `No matches across ${layers}${last} layers.`
+                          })()}
                         </div>
                       </div>
                     )}
@@ -601,7 +608,6 @@ export default function PromptTestingPage() {
         <RowDetail
           row={logRow}
           onClose={() => setShowLogDetail(false)}
-          detectors={[]}
         />
       )}
     </div>

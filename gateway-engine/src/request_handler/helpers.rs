@@ -189,6 +189,7 @@ mod tests {
                     threshold: None,
                     enforced: None,
                     would_block: None,
+                    detectors_evaluated: None,
                 },
             ],
             final_decision: "allow".to_string(),
