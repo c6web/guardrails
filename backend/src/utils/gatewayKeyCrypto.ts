@@ -102,6 +102,7 @@ export const contentQualityServiceKeyDecrypt = (stored: string) => decrypt(store
 function isProviderCiphertext(value: string): boolean {
   if (value.startsWith('v2:')) return true
   if (value.startsWith('enc:')) return true
+  if (!/^[A-Za-z0-9+/=]+$/.test(value)) return false
   try {
     return Buffer.from(value, 'base64').length > 28
   } catch {
