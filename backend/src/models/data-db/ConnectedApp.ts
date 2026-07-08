@@ -39,6 +39,8 @@ interface ConnectedAppAttributes {
   quota_enforcement?: 'hard' | 'soft'
   quota_reset_day?: number | null
   quota_period_start?: Date | null
+  detectors_custom?: boolean
+  threat_knowledge_custom?: boolean
   created_at?: Date
   updated_at?: Date
 }
@@ -51,6 +53,7 @@ type ConnectedAppCreationAttributes = Optional<
   'max_tokens' | 'max_payload_size' | 'enable_t2' | 'enable_knowledge_dev' |
   'quota_mode' | 'quota_limit' | 'quota_warning_limit' | 'quota_enforcement' |
   'quota_reset_day' | 'quota_period_start' | 'org_id' |
+  'detectors_custom' | 'threat_knowledge_custom' |
   'enable_response_cache' | 'cache_ttl_seconds' | 'multi_turn_semantic_enabled' |
   'enable_content_quality_scan' | 'content_quality_scan_mode' | 'content_quality_scan_threshold'
 >
@@ -102,6 +105,8 @@ export class ConnectedApp
   // (mapped to created_at/updated_at columns via underscored:true) — the
   // created_at/updated_at fields above are DB column names, not real
   // runtime attributes, so code needing the actual value must use these.
+  declare detectors_custom: boolean
+  declare threat_knowledge_custom: boolean
   declare readonly createdAt: Date
   declare readonly updatedAt: Date
 }
@@ -159,6 +164,8 @@ export function initConnectedAppModel(sequelize: Sequelize): typeof ConnectedApp
         allowNull: false,
         defaultValue: false,
       },
+      detectors_custom:           { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+      threat_knowledge_custom:    { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       quota_mode:          { type: DataTypes.TEXT,    allowNull: false, defaultValue: 'unlimited' },
       quota_limit:         { type: DataTypes.INTEGER, allowNull: true },
       quota_warning_limit: { type: DataTypes.INTEGER, allowNull: true },

@@ -495,7 +495,7 @@ router.patch(
       const allTK = await ThreatKnowledge.findAll({ order: [['name', 'ASC']] })
       const selected = await AppThreatKnowledgeSelection.findAll({ where: { app_id: req.params['id'] } })
       const selectedIds = new Set(selected.map(s => s.threat_knowledge_id))
-      const isCustom = selectedIds.size > 0
+      const isCustom = app.threat_knowledge_custom
       const data = allTK.map(tk => ({
         id: tk.id,
         name: tk.name,
@@ -504,7 +504,7 @@ router.patch(
         threat_context: tk.threat_context,
         status: tk.status,
         source: tk.source,
-        enabled: selectedIds.size === 0 || selectedIds.has(tk.id),
+        enabled: selectedIds.size === 0 ? !app.threat_knowledge_custom : selectedIds.has(tk.id),
       }))
       res.json({ data, isCustom })
     } catch (err) {
@@ -528,10 +528,11 @@ router.patch(
         return
       }
 
-      // Reset to all-enabled (delete all rows)
       if (selectedIds === null) {
+        app.threat_knowledge_custom = false
         await AppThreatKnowledgeSelection.destroy({ where: { app_id: req.params['id'] } })
       } else {
+        app.threat_knowledge_custom = true
         await AppThreatKnowledgeSelection.destroy({ where: { app_id: req.params['id'] } })
         for (const id of selectedIds) {
           try {
@@ -539,6 +540,9 @@ router.patch(
           } catch {}
         }
       }
+      await app.save()
+
+      triggerGatewayReload()
 
       res.json({ success: true })
     } catch (err) {
@@ -562,7 +566,7 @@ router.patch(
       })
       const selected = await AppDetectorSelection.findAll({ where: { app_id: req.params['id'] } })
       const selectedIds = new Set(selected.map(s => s.detector_id))
-      const isCustom = selectedIds.size > 0
+      const isCustom = app.detectors_custom
       const data = allDetectors.map(d => ({
         id: d.id,
         name: d.name,
@@ -573,7 +577,7 @@ router.patch(
         mode: d.mode,
         keywords: d.keywords,
         redaction_placeholder: d.redaction_placeholder,
-        enabled: selectedIds.size === 0 || selectedIds.has(d.id),
+        enabled: selectedIds.size === 0 ? !app.detectors_custom : selectedIds.has(d.id),
       }))
       res.json({ data, isCustom })
     } catch (err) {
@@ -598,8 +602,10 @@ router.patch(
       }
 
       if (selectedIds === null) {
+        app.detectors_custom = false
         await AppDetectorSelection.destroy({ where: { app_id: req.params['id'] } })
       } else {
+        app.detectors_custom = true
         await AppDetectorSelection.destroy({ where: { app_id: req.params['id'] } })
         for (const id of selectedIds) {
           try {
@@ -607,6 +613,9 @@ router.patch(
           } catch {}
         }
       }
+      await app.save()
+
+      triggerGatewayReload()
 
       res.json({ success: true })
     } catch (err) {

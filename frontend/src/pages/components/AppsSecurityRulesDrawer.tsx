@@ -156,7 +156,7 @@ function MergedDetectorsSection({
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <span className="label-strong" style={{ fontSize: 13 }}>Scanners</span>
-        <Chip kind="warn" mono>prompt/response scanning</Chip>
+        <Chip kind="warn">prompt/response scanning</Chip>
         <Chip kind={customInput ? 'warn' : 'ok'}>{customInput ? 'Customized' : 'Default'}</Chip>
         {customInput && (
           <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }} onClick={onReset}>Reset all</button>
@@ -323,7 +323,7 @@ function ToolGuardrailsSection({
       ) : (
          <>
             {/* Grid header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 1fr', alignItems: 'center', gap: 8, padding: '6px 8px', fontSize: 10, color: 'var(--fg-tertiary)', fontWeight: 600, borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 1fr', alignItems: 'center', gap: 6, padding: '6px 8px', fontSize: 10, color: 'var(--fg-tertiary)', fontWeight: 600, borderBottom: '1px solid var(--border-subtle)' }}>
               <input type="checkbox" checked={allBlocked} onChange={onToggleAll} style={{ cursor: 'pointer', margin: 0 }} />
               <span>Tool</span>
               <span>Description</span>
@@ -331,10 +331,10 @@ function ToolGuardrailsSection({
 
             {/* Grid rows */}
             {sorted.map(tool => (
-              <div key={tool.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 1fr', alignItems: 'center', gap: 8, padding: '8px', borderBottom: '1px solid var(--border-subtle)', fontSize: 12 }}>
+              <div key={tool.id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 1fr', alignItems: 'center', gap: 6, padding: '8px', borderBottom: '1px solid var(--border-subtle)', fontSize: 12 }}>
                 <input type="checkbox" checked={tool.blocked} onChange={() => onToggle(tool.id)} style={{ cursor: 'pointer', margin: 0 }} />
-                <span style={{ fontWeight: 500, fontFamily: 'monospace' }}>{tool.tool_name}</span>
-                <span title={tool.description ?? undefined} style={{ color: 'var(--fg-tertiary)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.description || '—'}</span>
+                <span style={{ fontWeight: 500 }}>{tool.tool_name}</span>
+                <span title={tool.description ?? undefined} style={{ color: 'var(--fg-tertiary)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.description || '—'}</span>
               </div>
             ))}
 
@@ -495,6 +495,7 @@ export function AppsSecurityRulesDrawer({ app: a, open, providerMap: _providerMa
           { key: 'threat', label: 'Threat Knowledge' },
           { key: 'guardrails', label: 'Tool Guardrails' },
         ]} activeKey={tab} onChange={setTab} />
+        <div style={{ padding: '16px 20px' }}>
 
         {tab === 'threat' && (
           <ThreatKnowledgeSection
@@ -570,6 +571,7 @@ export function AppsSecurityRulesDrawer({ app: a, open, providerMap: _providerMa
             }}
           />
         )}
+      </div>
       </Drawer>
     </>
   )

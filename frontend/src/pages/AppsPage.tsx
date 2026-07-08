@@ -142,8 +142,8 @@ const AppsPageInner: React.FC<AppsPageProps> = () => {
             ? <Chip kind="info" dot>KD on</Chip>
             : <Chip kind="muted" dot>KD off</Chip>}
           {a.enableContentQualityScan
-            ? <Chip kind="info" dot>Content Quality on</Chip>
-            : <Chip kind="muted" dot>Content Quality off</Chip>}
+            ? <Chip kind="info" dot>CQ on</Chip>
+            : <Chip kind="muted" dot>CQ off</Chip>}
         </div>
       ),
     },
@@ -226,7 +226,7 @@ const AppsPageInner: React.FC<AppsPageProps> = () => {
     {
       key: 'actions',
       label: 'Action',
-      width: 60,
+      width: 136,
       render: (a) => (
         <div onClick={e => e.stopPropagation()}>
           <ActionCell actions={[

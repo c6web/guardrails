@@ -14,7 +14,7 @@ export interface ActionCellProps {
 }
 
 const ActionCell: React.FC<ActionCellProps> = ({ actions }) => (
-  <div className="row-tight" style={{ gap: 2 }} onClick={e => e.stopPropagation()}>
+  <div className="row-tight" style={{ gap: 4 }} onClick={e => e.stopPropagation()}>
     {actions.map((a, i) => (
       <button key={i} className="icon-btn"
         title={a.title ?? a.label}

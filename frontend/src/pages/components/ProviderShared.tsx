@@ -642,7 +642,7 @@ export function ProviderTestModal({ provider, apiBase, onClose }: {
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '16px 20px' }}>
         {/* Provider info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-sunken)', borderRadius: 6 }}>
           <Network w={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />

@@ -6,6 +6,7 @@ import { getOrCreateConfig } from '../models/data-db/ClassifierConfig'
 import { requireRole } from '../middleware/requireRole'
 import { runProviderTest } from '../utils/providerTest'
 import { providerKeyEncryptOnce, providerKeyDecrypt } from '../utils/gatewayKeyCrypto'
+import { triggerGatewayReload } from '../utils/gatewayReload'
 import { v4 as uuidv4 } from 'uuid'
 import type { ILogStore } from '../logs/ILogStore'
 
@@ -77,6 +78,7 @@ function createRouter(logStore: ILogStore): Router {
         data_collection: typeof data_collection === 'string' ? data_collection : null,
         requests_24h: 0, errors_24h: 0, avg_latency_ms: 0,
       })
+      triggerGatewayReload()
       const json = newProvider.toJSON() as unknown as Record<string, unknown>
       delete json['api_key']
       res.status(201).json({ data: json })
@@ -113,6 +115,7 @@ function createRouter(logStore: ILogStore): Router {
         delete updates['api_key']
       }
       await provider.update(updates)
+      triggerGatewayReload()
       const json = provider.toJSON() as unknown as Record<string, unknown>
       json['has_api_key'] = typeof json['api_key'] === 'string' && !!(json['api_key'] as string)
       delete json['api_key']

@@ -237,6 +237,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
+name = "c6-guardrails-gateway-engine"
+version = "0.1.1"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "axum",
+ "base64",
+ "chrono",
+ "futures",
+ "hkdf",
+ "http",
+ "hyper",
+ "hyper-util",
+ "ipnet",
+ "moka",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "pgvector",
+ "prometheus",
+ "rand 0.8.6",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "subtle",
+ "tokio",
+ "tower 0.5.3",
+ "tower-http",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -602,44 +640,6 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
-]
-
-[[package]]
-name = "gateway-engine"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "axum",
- "base64",
- "chrono",
- "futures",
- "hkdf",
- "http",
- "hyper",
- "hyper-util",
- "ipnet",
- "moka",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "pgvector",
- "prometheus",
- "rand 0.8.6",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "subtle",
- "tokio",
- "tower 0.5.3",
- "tower-http",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]

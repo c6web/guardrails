@@ -488,9 +488,9 @@ a:hover { text-decoration: underline; }
    Tables
    ============================================================= */
 table.t { width: 100%; border-collapse: collapse; font-size: var(--fs-12); font-variant-numeric: tabular-nums; table-layout: fixed; }
-table.t thead th { background: var(--bg-sunken); text-align: left; padding: 0 12px; height: 30px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--fg-secondary); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+table.t thead th { background: var(--bg-sunken); text-align: left; padding: 0 14px; height: 30px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--fg-secondary); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
 table.t thead th.r { text-align: right; }
-table.t tbody td { padding: 0 12px; height: 32px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; white-space: normal; }
+table.t tbody td { padding: 4px 14px; height: 32px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; white-space: normal; }
 table.t tbody tr { cursor: pointer; }
 table.t tbody tr:hover { background: var(--bg-hover); }
 table.t tbody tr.selected { background: var(--bg-selected); }

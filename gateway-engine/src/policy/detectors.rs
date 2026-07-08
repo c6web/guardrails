@@ -123,9 +123,25 @@ pub(super) async fn load_app_security_overrides(store: &DetectorStore, pool: &Pg
     match result {
         Ok(rows) => {
             let mut map: HashMap<String, Vec<String>> = HashMap::new();
-            for row in rows {
-                map.entry(row.app_id).or_default().push(row.detector_id);
+            for row in &rows {
+                map.entry(row.app_id.clone()).or_default().push(row.detector_id.clone());
             }
+
+            // Apps with detectors_custom=true but no selection records have explicitly
+            // disabled all detectors — add them with empty vecs so the engine runs nothing.
+            if let Ok(custom_apps) = sqlx::query_scalar::<_, String>(
+                "SELECT id::text FROM connected_apps WHERE detectors_custom = true",
+            )
+            .fetch_all(pool)
+            .await
+            {
+                for app_id in &custom_apps {
+                    if !map.contains_key(app_id) {
+                        map.insert(app_id.clone(), Vec::new());
+                    }
+                }
+            }
+
             tracing::info!("[detector_loader] loaded {} app detector overrides", map.len());
             *store.app_detector_ids.write().unwrap_or_else(|e| e.into_inner()) = map;
         }
@@ -145,9 +161,25 @@ pub(super) async fn load_app_security_overrides(store: &DetectorStore, pool: &Pg
     match result {
         Ok(rows) => {
             let mut map: HashMap<String, Vec<String>> = HashMap::new();
-            for row in rows {
-                map.entry(row.app_id).or_default().push(row.threat_knowledge_id);
+            for row in &rows {
+                map.entry(row.app_id.clone()).or_default().push(row.threat_knowledge_id.clone());
             }
+
+            // Apps with threat_knowledge_custom=true but no selection records have
+            // explicitly disabled all threat knowledge — add them with empty vecs.
+            if let Ok(custom_apps) = sqlx::query_scalar::<_, String>(
+                "SELECT id::text FROM connected_apps WHERE threat_knowledge_custom = true",
+            )
+            .fetch_all(pool)
+            .await
+            {
+                for app_id in &custom_apps {
+                    if !map.contains_key(app_id) {
+                        map.insert(app_id.clone(), Vec::new());
+                    }
+                }
+            }
+
             tracing::info!("[detector_loader] loaded {} app threat knowledge overrides", map.len());
             *store.app_threat_knowledge_ids.write().unwrap_or_else(|e| e.into_inner()) = map;
         }
