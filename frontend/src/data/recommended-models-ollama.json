@@ -1,0 +1,65 @@
+[
+  {
+    "id": "qwen3.5:9b",
+    "name": "Qwen3.5 9B",
+    "provider": "Alibaba",
+    "description": "Compact Qwen3.5 model with extended context — strong reasoning and instruction following",
+    "max_input_token": 262144,
+    "max_output_token": 262144,
+    "tags": ["recommended", "fast", "long-context"]
+  },
+  {
+    "id": "qwen3.6:27b",
+    "name": "Qwen3.6 27B",
+    "provider": "Alibaba",
+    "description": "Mid-size Qwen3.6 model with extended context — balanced performance and quality",
+    "max_input_token": 262144,
+    "max_output_token": 262144,
+    "tags": ["recommended", "balanced", "long-context"]
+  },
+  {
+    "id": "qwen3.6:35b",
+    "name": "Qwen3.6 35B",
+    "provider": "Alibaba",
+    "description": "Larger Qwen3.6 model with extended context — high quality reasoning and coding",
+    "max_input_token": 262144,
+    "max_output_token": 262144,
+    "tags": ["recommended", "flagship", "long-context"]
+  },
+  {
+    "id": "gpt-oss:20b",
+    "name": "GPT OSS 20B",
+    "provider": "OpenAI",
+    "description": "OpenAI open-source 20B model running locally — fast and cost-effective",
+    "max_input_token": 131072,
+    "max_output_token": 131072,
+    "tags": ["recommended", "fast", "open-source"]
+  },
+  {
+    "id": "gpt-oss:120b",
+    "name": "GPT OSS 120B",
+    "provider": "OpenAI",
+    "description": "OpenAI open-source 120B model running locally — highest quality in the OSS lineup",
+    "max_input_token": 131072,
+    "max_output_token": 131072,
+    "tags": ["recommended", "flagship", "open-source"]
+  },
+  {
+    "id": "gpt-oss-safeguard:20b",
+    "name": "GPT OSS Safeguard 20B",
+    "provider": "OpenAI",
+    "description": "OpenAI open-source safety-focused 20B model for content moderation and guardrails",
+    "max_input_token": 131072,
+    "max_output_token": 131072,
+    "tags": ["open-source", "safety"]
+  },
+  {
+    "id": "gpt-oss-safeguard:120b",
+    "name": "GPT OSS Safeguard 120B",
+    "provider": "OpenAI",
+    "description": "OpenAI open-source safety-focused 120B model for demanding moderation workloads",
+    "max_input_token": 131072,
+    "max_output_token": 131072,
+    "tags": ["open-source", "safety", "flagship"]
+  }
+]

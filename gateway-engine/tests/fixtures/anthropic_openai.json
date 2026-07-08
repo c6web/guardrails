@@ -1,0 +1,88 @@
+{
+  "description": "Anthropic client → OpenAI upstream: cross-dialect translation",
+  "client_dialect": "anthropic",
+  "upstream_vendor": "openai",
+  "feature": "text",
+  "note": "Gateway must translate Anthropic messages format to OpenAI chat completions format",
+  "request": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "headers": {
+      "content-type": "application/json",
+      "x-api-key": "ak-test-key",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "model": "gpt-4",
+      "messages": [
+        {"role": "user", "content": "Hello"}
+      ],
+      "max_tokens": 100,
+      "system": "You are helpful"
+    }
+  },
+  "expected_upstream_request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "headers": {
+      "content-type": "application/json",
+      "authorization": "Bearer sk-upstream-key"
+    },
+    "body": {
+      "model": "gpt-4",
+      "messages": [
+        {"role": "system", "content": "You are helpful"},
+        {"role": "user", "content": "Hello"}
+      ],
+      "max_tokens": 100
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "chatcmpl-ant-openai",
+      "object": "chat.completion",
+      "model": "gpt-4",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Hello! How can I help you?"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 12,
+        "completion_tokens": 9,
+        "total_tokens": 21
+      }
+    }
+  },
+  "expected_downstream_response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "id": "msg-ant-openai",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {"type": "text", "text": "Hello! How can I help you?"}
+      ],
+      "model": "gpt-4",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 12,
+        "output_tokens": 9,
+        "total_tokens": 21
+      }
+    }
+  }
+}

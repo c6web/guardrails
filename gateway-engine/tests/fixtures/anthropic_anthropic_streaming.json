@@ -1,0 +1,38 @@
+{
+  "description": "Anthropic client → Anthropic upstream: text chat (streaming)",
+  "client_dialect": "anthropic",
+  "upstream_vendor": "anthropic",
+  "feature": "streaming",
+  "request": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "headers": {
+      "content-type": "application/json",
+      "x-api-key": "ak-test-key",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "model": "claude-sonnet-4-20250514",
+      "messages": [
+        {"role": "user", "content": "Write a haiku about cats"}
+      ],
+      "max_tokens": 100,
+      "stream": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/event-stream",
+      "x-request-id": "req-ant-stream-001"
+    },
+    "body_chunks": [
+      {"event": "message_start", "data": "{\"type\":\"message_start\",\"model\":\"claude-sonnet-4-20250514\"}", "done": false},
+      {"event": "content_block_start", "data": "{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}", "done": false},
+      {"event": "text_delta", "data": "{\"type\":\"text_delta\",\"text\":\"A feline friend\", \"index\":0}", "done": false},
+      {"event": "text_delta", "data": "{\"type\":\"text_delta\",\"text\":\" Purring softly on a mat.\", \"index\":0}", "done": false},
+      {"event": "text_delta", "data": "{\"type\":\"text_delta\",\"text\":\" Softly purring, content\", \"index\":0}", "done": false},
+      {"event": "message_end", "data": "{\"type\":\"message_end\",\"stop_reason\":\"end_turn\"}", "done": true}
+    ]
+  }
+}

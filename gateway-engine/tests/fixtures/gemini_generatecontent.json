@@ -1,0 +1,87 @@
+{
+  "description": "OpenAI client → Gemini upstream: generateContent translation",
+  "client_dialect": "openai",
+  "upstream_vendor": "gemini",
+  "feature": "text",
+  "note": "Gateway translates OpenAI chat format to Gemini generateContent format",
+  "request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "headers": {
+      "content-type": "application/json",
+      "authorization": "Bearer sk-test-key"
+    },
+    "body": {
+      "model": "gemini-1.5-pro",
+      "messages": [
+        {"role": "user", "content": "What is Rust programming language?"}
+      ],
+      "max_tokens": 200
+    }
+  },
+  "expected_upstream_request": {
+    "method": "POST",
+    "path": "/v1beta/models/gemini-1.5-pro:generateContent",
+    "headers": {
+      "content-type": "application/json",
+      "x-api-key": "gemini-upstream-key"
+    },
+    "body": {
+      "contents": [
+        {"role": "user", "parts": [{"text": "What is Rust programming language?"}]}
+      ],
+      "generationConfig": {
+        "maxOutputTokens": 200
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "candidates": [
+        {
+          "index": 0,
+          "message": {
+            "role": "model",
+            "content": "Rust is a systems programming language focused on safety and performance."
+          },
+          "finishReason": "stop"
+        }
+      ],
+      "usage": {
+        "promptTokens": 15,
+        "candidatesTokens": 20,
+        "totalTokens": 35
+      }
+    }
+  },
+  "expected_downstream_response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "chatcmpl-gemini-001",
+      "object": "chat.completion",
+      "model": "gemini-1.5-pro",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Rust is a systems programming language focused on safety and performance."
+          },
+          "finishReason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 15,
+        "completion_tokens": 20,
+        "total_tokens": 35
+      }
+    }
+  }
+}

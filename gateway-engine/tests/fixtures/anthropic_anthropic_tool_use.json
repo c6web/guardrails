@@ -1,0 +1,62 @@
+{
+  "description": "Anthropic client → Anthropic upstream: tool_use",
+  "client_dialect": "anthropic",
+  "upstream_vendor": "anthropic",
+  "feature": "tool_use",
+  "request": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "headers": {
+      "content-type": "application/json",
+      "x-api-key": "ak-test-key",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "model": "claude-sonnet-4-20250514",
+      "messages": [
+        {"role": "user", "content": "What's the weather in Tokyo?"}
+      ],
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get current weather for a location",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "location": {"type": "string"}
+            },
+            "required": ["location"]
+          }
+        }
+      ],
+      "max_tokens": 100
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "id": "msg-tool-use-001",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_abc123",
+          "name": "get_weather",
+          "input": {"location": "Tokyo"}
+        }
+      ],
+      "model": "claude-sonnet-4-20250514",
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 35,
+        "output_tokens": 18,
+        "total_tokens": 53
+      }
+    }
+  }
+}

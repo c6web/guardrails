@@ -1,0 +1,45 @@
+{
+  "description": "Anthropic client → Anthropic upstream: text chat",
+  "client_dialect": "anthropic",
+  "upstream_vendor": "anthropic",
+  "feature": "text",
+  "request": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "headers": {
+      "content-type": "application/json",
+      "x-api-key": "ak-test-key",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "model": "claude-sonnet-4-20250514",
+      "messages": [
+        {"role": "user", "content": "Explain quantum computing simply"}
+      ],
+      "max_tokens": 100,
+      "system": "You are a helpful assistant."
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "id": "msg_abc123",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {"type": "text", "text": "Quantum computing uses quantum bits (qubits) that can exist in multiple states simultaneously, unlike classical bits."}
+      ],
+      "model": "claude-sonnet-4-20250514",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 15,
+        "output_tokens": 25,
+        "total_tokens": 40
+      }
+    }
+  }
+}

@@ -1,0 +1,145 @@
+'use strict'
+
+module.exports = {
+  async up(queryInterface) {
+    const now = new Date()
+    await queryInterface.bulkInsert('detectors', [
+      // CM01 — Inappropriate / Adult Content (both directions)
+      {
+        id: '00000000-0000-0000-c001-000000000001',
+        name: 'cm.adult.keywords.v1',
+        description: 'Detects explicit adult/sexual content keywords in prompts',
+        threshold: 0.75,
+        mode: 'flag',
+        rule_type: 'keyword',
+        category: 'CM01',
+        scanning_scope: 'both',
+        keywords: [
+          'write me porn',
+          'sexual explicit content',
+          'nude images description',
+          'erotic fiction request',
+          'adult sexual content',
+          'write erotica',
+          'explicit sex scene',
+          'pornographic content',
+          'nsfw content only',
+          'explicit sexual story',
+          'sexual explicit material',
+        ],
+        created_at: now,
+        updated_at: now,
+      },
+      // CM02 — Hate Speech / Harassment (both directions)
+      {
+        id: '00000000-0000-0000-c002-000000000001',
+        name: 'cm.hate.keywords.v1',
+        description: 'Detects hate speech and targeted harassment patterns',
+        threshold: 0.75,
+        mode: 'flag',
+        rule_type: 'keyword',
+        category: 'CM02',
+        scanning_scope: 'both',
+        keywords: [
+          'racial slur',
+          'ethnic slur',
+          'white supremacy propaganda',
+          'racial superiority',
+          'ethnic cleansing',
+          'death to all',
+          'exterminate all',
+          'neo-nazi propaganda',
+          'gas the',
+          'kill all the',
+        ],
+        created_at: now,
+        updated_at: now,
+      },
+      // CM03 — Violence / Gore (both directions)
+      {
+        id: '00000000-0000-0000-c003-000000000001',
+        name: 'cm.violence.keywords.v1',
+        description: 'Detects graphic violence, gore, and torture descriptions',
+        threshold: 0.75,
+        mode: 'flag',
+        rule_type: 'keyword',
+        category: 'CM03',
+        scanning_scope: 'both',
+        keywords: [
+          'graphic gore',
+          'decapitation scene',
+          'torture in detail',
+          'describe dismemberment',
+          'gruesome murder details',
+          'describe beheading',
+          'torture methods detailed',
+          'graphic killing description',
+          'gory death details',
+          'mutilation description',
+        ],
+        created_at: now,
+        updated_at: now,
+      },
+      // CM04 — Illegal Activities (both directions)
+      {
+        id: '00000000-0000-0000-c004-000000000001',
+        name: 'cm.illegal.keywords.v1',
+        description: 'Detects requests for illegal activity instructions',
+        threshold: 0.80,
+        mode: 'block',
+        rule_type: 'keyword',
+        category: 'CM04',
+        scanning_scope: 'both',
+        keywords: [
+          'how to make meth',
+          'drug synthesis instructions',
+          'synthesize cocaine',
+          'make heroin',
+          'how to make a bomb',
+          'improvised explosive device',
+          'ghost gun instructions',
+          'human trafficking',
+          'unregistered firearm instructions',
+          'fentanyl synthesis',
+          'drug manufacturing process',
+          'child exploitation material',
+        ],
+        created_at: now,
+        updated_at: now,
+      },
+      // CM05 — Self-Harm (both directions)
+      {
+        id: '00000000-0000-0000-c005-000000000001',
+        name: 'cm.selfharm.keywords.v1',
+        description: 'Detects self-harm, suicide, and eating disorder promotion',
+        threshold: 0.75,
+        mode: 'flag',
+        rule_type: 'keyword',
+        category: 'CM05',
+        scanning_scope: 'both',
+        keywords: [
+          'how to commit suicide',
+          'suicide methods',
+          'how to self harm',
+          'self-harm instructions',
+          'how to cut myself',
+          'pro-ana advice',
+          'thinspiration tips',
+          'bulimia tips',
+          'how to starve safely',
+          'suicide note help',
+          'methods of self-injury',
+        ],
+        created_at: now,
+        updated_at: now,
+      },
+    ], { ignoreDuplicates: true })
+  },
+
+  async down(queryInterface) {
+    const { Op } = require('sequelize')
+    await queryInterface.bulkDelete('detectors', {
+      category: { [Op.in]: ['CM01', 'CM02', 'CM03', 'CM04', 'CM05'] },
+    }, {})
+  },
+}

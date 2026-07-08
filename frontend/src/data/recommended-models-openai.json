@@ -1,0 +1,29 @@
+[
+  {
+    "id": "gpt-5.5",
+    "name": "GPT-5.5",
+    "provider": "OpenAI",
+    "description": "OpenAI's most capable flagship model — advanced reasoning, vision, and instruction following",
+    "max_input_token": 1000000,
+    "max_output_token": 128000,
+    "tags": ["recommended", "flagship"]
+  },
+  {
+    "id": "gpt-5.4-mini",
+    "name": "GPT-5.4 Mini",
+    "provider": "OpenAI",
+    "description": "Balanced performance and cost — strong reasoning with faster response times",
+    "max_input_token": 128000,
+    "max_output_token": 128000,
+    "tags": ["recommended", "fast", "cost-effective"]
+  },
+  {
+    "id": "gpt-5.4-nano",
+    "name": "GPT-5.4 Nano",
+    "provider": "OpenAI",
+    "description": "Ultra-lightweight OpenAI model optimised for high-throughput low-latency tasks",
+    "max_input_token": 128000,
+    "max_output_token": 128000,
+    "tags": ["fast", "cost-effective"]
+  }
+]

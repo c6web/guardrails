@@ -1,0 +1,20 @@
+[
+  {
+    "id": "claude-sonnet-4-6",
+    "name": "Claude Sonnet 4.6",
+    "provider": "Anthropic",
+    "description": "Anthropic's balanced flagship model — strong reasoning, coding, and instruction following",
+    "max_input_token": 1000000,
+    "max_output_token": 64000,
+    "tags": ["recommended", "flagship"]
+  },
+  {
+    "id": "claude-haiku-4-5",
+    "name": "Claude Haiku 4.5",
+    "provider": "Anthropic",
+    "description": "Anthropic's fastest and most compact model — optimised for high-throughput low-latency tasks",
+    "max_input_token": 200000,
+    "max_output_token": 64000,
+    "tags": ["recommended", "fast", "cost-effective"]
+  }
+]

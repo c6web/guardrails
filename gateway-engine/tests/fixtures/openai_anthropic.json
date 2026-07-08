@@ -1,0 +1,85 @@
+{
+  "description": "OpenAI client → Anthropic upstream: cross-dialect translation",
+  "client_dialect": "openai",
+  "upstream_vendor": "anthropic",
+  "feature": "text",
+  "note": "Gateway must translate OpenAI messages format to Anthropic messages format",
+  "request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "headers": {
+      "content-type": "application/json",
+      "authorization": "Bearer sk-test-key"
+    },
+    "body": {
+      "model": "claude-sonnet-4-20250514",
+      "messages": [
+        {"role": "system", "content": "You are helpful"},
+        {"role": "user", "content": "Hello"}
+      ]
+    }
+  },
+  "expected_upstream_request": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "headers": {
+      "content-type": "application/json",
+      "x-api-key": "ak-upstream-key",
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "model": "claude-sonnet-4-20250514",
+      "messages": [
+        {"role": "user", "content": "Hello"}
+      ],
+      "system": "You are helpful"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "msg-cross-001",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {"type": "text", "text": "Hello! How can I help?"}
+      ],
+      "model": "claude-sonnet-4-20250514",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 12,
+        "total_tokens": 22
+      }
+    }
+  },
+  "expected_downstream_response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "chatcmpl-cross-001",
+      "object": "chat.completion",
+      "model": "claude-sonnet-4-20250514",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Hello! How can I help?"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 10,
+        "completion_tokens": 12,
+        "total_tokens": 22
+      }
+    }
+  }
+}

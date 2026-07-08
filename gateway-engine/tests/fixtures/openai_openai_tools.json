@@ -1,0 +1,73 @@
+{
+  "description": "OpenAI client → OpenAI upstream: tool calls",
+  "client_dialect": "openai",
+  "upstream_vendor": "openai",
+  "feature": "tools",
+  "request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "headers": {
+      "content-type": "application/json",
+      "authorization": "Bearer sk-test-key"
+    },
+    "body": {
+      "model": "gpt-4",
+      "messages": [
+        {"role": "user", "content": "What's the weather in San Francisco?"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get the current weather",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {"type": "string"}
+              },
+              "required": ["location"]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "req-tools-001"
+    },
+    "body": {
+      "id": "chatcmpl-tools1",
+      "object": "chat.completion",
+      "model": "gpt-4",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "call_abc123",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"location\":\"San Francisco\"}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 45,
+        "completion_tokens": 20,
+        "total_tokens": 65
+      }
+    }
+  }
+}

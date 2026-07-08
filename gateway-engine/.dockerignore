@@ -1,0 +1,7 @@
+target/
+.git/
+*.md
+*.sh
+Dockerfile
+.dockerignore
+security_issues.md

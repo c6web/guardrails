@@ -1,0 +1,35 @@
+{
+  "description": "OpenAI client → OpenAI upstream: text chat (streaming)",
+  "client_dialect": "openai",
+  "upstream_vendor": "openai",
+  "feature": "streaming",
+  "request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "headers": {
+      "content-type": "application/json",
+      "authorization": "Bearer sk-test-key"
+    },
+    "body": {
+      "model": "gpt-4",
+      "messages": [
+        {"role": "user", "content": "Tell me a short story about a cat."}
+      ],
+      "max_tokens": 50,
+      "stream": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/event-stream",
+      "x-request-id": "req-67890"
+    },
+    "body_chunks": [
+      {"data": "{\"id\":\"chatcmpl-x\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Once\"}]}", "done": false},
+      {"data": "{\"id\":\"chatcmpl-x\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" upon\"}]}", "done": false},
+      {"data": "{\"id\":\"chatcmpl-x\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" a time\"}]}", "done": false},
+      {"data": "{\"id\":\"chatcmpl-x\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}", "done": true}
+    ]
+  }
+}

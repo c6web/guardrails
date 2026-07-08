@@ -1,0 +1,38 @@
+[
+  {
+    "id": "openai/gpt-oss-120b",
+    "name": "GPT OSS 120B",
+    "provider": "OpenAI",
+    "description": "OpenAI open-source 120B parameter model for general-purpose tasks",
+    "max_input_token": 131072,
+    "max_output_token": 131072,
+    "tags": ["recommended", "flagship", "open-source"]
+  },
+  {
+    "id": "openai/gpt-oss-20b",
+    "name": "GPT OSS 20B",
+    "provider": "OpenAI",
+    "description": "OpenAI open-source 20B parameter model — fast and cost-effective",
+    "max_input_token": 131072,
+    "max_output_token": 131072,
+    "tags": ["recommended", "fast", "open-source", "cost-effective"]
+  },
+  {
+    "id": "google/gemma-4-26b-a4b-it",
+    "name": "Gemma 4 26B (A4B) IT",
+    "provider": "Google",
+    "description": "Google Gemma 4 MoE instruction-tuned model with 26B total / 4B active parameters",
+    "max_input_token": 262144,
+    "max_output_token": 262144,
+    "tags": ["recommended", "open-source", "long-context", "fast"]
+  },
+  {
+    "id": "openai/gpt-oss-safeguard-20b",
+    "name": "GPT OSS Safeguard 20B",
+    "provider": "OpenAI",
+    "description": "OpenAI open-source safety-focused 20B model for content moderation and guardrails",
+    "max_input_token": 131072,
+    "max_output_token": 131072,
+    "tags": ["open-source", "safety"]
+  }
+]

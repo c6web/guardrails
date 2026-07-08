@@ -1,0 +1,49 @@
+{
+  "description": "OpenAI client → OpenAI upstream: text chat (no streaming)",
+  "client_dialect": "openai",
+  "upstream_vendor": "openai",
+  "feature": "text",
+  "request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "headers": {
+      "content-type": "application/json",
+      "authorization": "Bearer sk-test-key"
+    },
+    "body": {
+      "model": "gpt-4",
+      "messages": [
+        {"role": "user", "content": "Hello, how are you?"}
+      ],
+      "max_tokens": 100,
+      "temperature": 0.7
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "req-12345"
+    },
+    "body": {
+      "id": "chatcmpl-abc123",
+      "object": "chat.completion",
+      "model": "gpt-4",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "I'm doing well, thank you!"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 12,
+        "completion_tokens": 8,
+        "total_tokens": 20
+      }
+    }
+  }
+}
