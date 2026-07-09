@@ -100,6 +100,7 @@ pub async fn run_t2_analysis(
     request_id:   &str,
     mut summary:  ScanSummary,
     log_writer:   &crate::tools::log_writer::LogWriter,
+    app_id:       &str,
 ) -> ScanSummary {
     let classifier_cfg = policy_store.classifier_provider.read().unwrap_or_else(|e| e.into_inner()).clone();
 
@@ -121,7 +122,7 @@ pub async fn run_t2_analysis(
 
     let t2_start = std::time::Instant::now();
     let raw = llm_complete(
-        client, &provider, &effective_prompt, prompt_text, "t2", log_writer, Some(request_id), policy_store,
+        client, &provider, &effective_prompt, prompt_text, "t2", log_writer, Some(request_id), policy_store, app_id,
         max_tokens,
     ).await;
     let t2_ms = t2_start.elapsed().as_millis() as i64;

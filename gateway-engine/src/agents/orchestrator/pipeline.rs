@@ -646,6 +646,7 @@ pub async fn scan_pipeline(
         log_writer,
         Some(request_id),
         policy_store,
+        app_id,
     ).await;
     let llm_ms = llm_start.elapsed().as_millis() as i64;
 

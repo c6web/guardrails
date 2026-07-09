@@ -345,6 +345,7 @@ pub async fn handle_moderations_request(
                 log_writer,
                 Some(&request_id),
                 policy_store,
+                app_id,
             )
             .await
             {

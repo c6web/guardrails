@@ -249,7 +249,7 @@ pub(crate) async fn dispatch_enforcement(
                         None
                     }
                 });
-            let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt_redacted, ctx.policy_store);
+            let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt_redacted, ctx.policy_store, ctx.app_id);
 
             if app_mode == "soft" {
                 tracing::warn!(
@@ -267,6 +267,7 @@ pub(crate) async fn dispatch_enforcement(
                     reason.as_deref(),
                     ctx.user_prompt.as_deref().unwrap_or(""),
                     ctx.log_writer,
+                    ctx.app_id,
                 ).await;
 
                 let threat_knowledge_matches_json = if !scan_summary.semantic_matches.is_empty() {
@@ -394,7 +395,7 @@ pub(crate) async fn dispatch_enforcement(
                 let elapsed = ctx.start_time.elapsed().as_millis() as i64;
                 tracing::warn!("[redact] {} MULTIPART_REDACT_UNSUPPORTED app=\"{}\" detector=\"{}\"",
                     ctx.request_id, ctx.app_name, detector);
-                let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt_redacted, ctx.policy_store);
+                let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt_redacted, ctx.policy_store, ctx.app_id);
                 ctx.log_writer.log_entry(LogEntry {
                     request_id: ctx.request_id.to_string(),
                     app_id: ctx.app_id.to_string(),

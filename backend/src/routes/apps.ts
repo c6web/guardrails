@@ -561,7 +561,7 @@ router.patch(
       if (!await canAccessApp(req, app.id)) { res.status(403).json({ error: 'Forbidden' }); return }
 
       const allDetectors = await Detector.findAll({
-        where: { scanning_scope: ['input', 'both'] },
+        where: { scanning_scope: ['input', 'output', 'both'] },
         order: [['name', 'ASC']],
       })
       const selected = await AppDetectorSelection.findAll({ where: { app_id: req.params['id'] } })

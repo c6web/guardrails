@@ -139,7 +139,7 @@ pub async fn develop_threat_knowledge(
     attack_prompt: &str,
     t2_reason:    &str,
     request_id:   &str,
-    _app_id:      &str,
+    app_id:       &str,
     policy_store: &DetectorStore,
     pool:         &PgPool,
     log_writer:   &crate::tools::log_writer::LogWriter,
@@ -166,7 +166,7 @@ pub async fn develop_threat_knowledge(
         attack_prompt, t2_reason
     );
     let raw = match llm_complete(
-        client, &classifier, KNOWLEDGE_DEV_SYSTEM_PROMPT, &user_msg, "knowledge_dev", log_writer, Some(request_id), policy_store,
+        client, &classifier, KNOWLEDGE_DEV_SYSTEM_PROMPT, &user_msg, "knowledge_dev", log_writer, Some(request_id), policy_store, app_id,
         crate::constants::KNOWLEDGE_DEV_MAX_OUTPUT_TOKENS,
     ).await {
         Ok(r)  => r,
@@ -210,7 +210,7 @@ pub async fn develop_threat_knowledge(
             entry.name, entry.description, entry.threat_context, t2_reason, format_existing_entries(&hits)
         );
         let judgement = match llm_complete(
-            client, &classifier, KNOWLEDGE_DEDUP_SYSTEM_PROMPT, &user_msg, "knowledge_dedup", log_writer, Some(request_id), policy_store,
+            client, &classifier, KNOWLEDGE_DEDUP_SYSTEM_PROMPT, &user_msg, "knowledge_dedup", log_writer, Some(request_id), policy_store, app_id,
             crate::constants::KNOWLEDGE_DEV_MAX_OUTPUT_TOKENS,
         ).await {
             Ok(raw) => parse_dedup_judgement(&raw),

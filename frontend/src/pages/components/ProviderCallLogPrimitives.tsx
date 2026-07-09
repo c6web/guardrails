@@ -9,6 +9,10 @@ export function fmtMs(ms: number) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms}ms`
 }
 
+export function isTimeoutError(errorMessage?: string | null): boolean {
+  return !!errorMessage && errorMessage.startsWith('[timeout')
+}
+
 export function callTypeKind(ct: string): 'info' | 'warn' | 'ok' | 'muted' {
   if (ct === 'upstream') return 'ok'
   if (ct === 'classifier' || ct === 'knowledge_dev' || ct === 'cache') return 'info'
@@ -80,7 +84,12 @@ export function DetailDrawer({ row, open, onClose, onDelete }: { row: AiProvider
     >
       <div style={{ padding: '16px 20px', overflowY: 'auto' }}>
         <KV labelWidth={100} gap={8} style={{ marginBottom: 18 }} rows={[
-          { label: 'Status', value: row.success ? <Chip kind="ok" dot>Success</Chip> : <Chip kind="err" dot>Failed</Chip> },
+          { label: 'Status', value: row.success
+              ? <Chip kind="ok" dot>Success</Chip>
+              : <span style={{ display: 'flex', gap: 6 }}>
+                  <Chip kind="err" dot>Failed</Chip>
+                  {isTimeoutError(row.error_message) && <Chip kind="warn">Timeout</Chip>}
+                </span> },
           { label: 'Call type', value: <Chip kind={callTypeKind(row.call_type)}>{row.call_type}</Chip> },
           { label: 'Source', value: <Chip kind="muted">{row.source}</Chip> },
           { label: 'Duration', value: <span style={{ fontSize: 12 }}>{fmtMs(row.duration_ms)}</span>, mono: true },

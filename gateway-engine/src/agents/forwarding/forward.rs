@@ -224,7 +224,7 @@ pub async fn forward_with_fallback(
                 let mut output_redacted_reply:  Option<String>   = None;
 
                 if let Some(reply) = &assistant_reply {
-                    let scan_result = super::output_scan::scan_output_impl(policy_store, request_id, app_name, reply);
+                    let scan_result = super::output_scan::scan_output_impl(policy_store, request_id, app_id, app_name, reply);
                     output_scan_flagged = scan_result.flagged;
                     output_scan_framework_id.clone_from(&scan_result.category);
                     output_scan_confidence = Some(scan_result.confidence);
@@ -242,7 +242,7 @@ pub async fn forward_with_fallback(
                 // R5/V2: Also scan tool call args for flag/block/redact decisions.
                 let mut tool_args_redacted = false;
                 crate::content::tool_calls::for_each_tool_call_args(&canonical, |args| {
-                    let tool_scan = super::output_scan::scan_output_impl(policy_store, request_id, app_name, args);
+                    let tool_scan = super::output_scan::scan_output_impl(policy_store, request_id, app_id, app_name, args);
                     if tool_scan.flagged && !output_scan_flagged {
                         output_scan_flagged = true;
                     }
@@ -307,8 +307,8 @@ pub async fn forward_with_fallback(
                         "[blocked] {} CONTENT_QUALITY_BLOCKED app=\"{}\" reason={} elapsed={}ms",
                         request_id, app_name, format_option(&content_quality_reason), elapsed
                     );
-                    let redacted_user_prompt = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store));
-                    let redacted_assistant_reply = assistant_reply.as_ref().map(|ar| redact_or_keep(ar, policy_store));
+                    let redacted_user_prompt = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store, app_id));
+                    let redacted_assistant_reply = assistant_reply.as_ref().map(|ar| redact_or_keep(ar, policy_store, app_id));
                     let blocked_status = StatusCode::BAD_REQUEST.as_u16() as i16;
                     let cq_trace = append_content_quality_stage(&pipeline_trace, "blocked", &content_quality_reason);
                     log_writer.log_entry(LogEntry {
@@ -397,8 +397,8 @@ pub async fn forward_with_fallback(
                         }
                     };
                     // Redact sensitive fields before logging (G5 fix)
-                    let redacted_user_prompt = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store));
-                    let redacted_assistant_reply = assistant_reply.as_ref().map(|ar| redact_or_keep(ar, policy_store));
+                    let redacted_user_prompt = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store, app_id));
+                    let redacted_assistant_reply = assistant_reply.as_ref().map(|ar| redact_or_keep(ar, policy_store, app_id));
                     let blocked_status = StatusCode::BAD_REQUEST.as_u16() as i16;
                     log_writer.log_entry(LogEntry {
                         request_id: request_id.to_string(),
@@ -493,9 +493,9 @@ pub async fn forward_with_fallback(
                 };
 
                 // Redact sensitive fields before logging (G5 fix)
-                let redacted_user_prompt = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store));
-                let redacted_excerpt = excerpt.map(|e| redact_or_keep(e, policy_store));
-                let redacted_assistant_reply = assistant_reply.as_ref().map(|ar| redact_or_keep(ar, policy_store));
+                let redacted_user_prompt = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store, app_id));
+                let redacted_excerpt = excerpt.map(|e| redact_or_keep(e, policy_store, app_id));
+                let redacted_assistant_reply = assistant_reply.as_ref().map(|ar| redact_or_keep(ar, policy_store, app_id));
 
                 // Clone trace for the async CQ scan before moving it into the log entry.
                 let async_cq_trace = if cq_run_async { routed_trace.clone() } else { None };
@@ -707,7 +707,7 @@ pub async fn forward_with_fallback(
 
                     // G5 fix: redact PII from upstream response before logging
                     let resp_text = String::from_utf8_lossy(&body_bytes).into_owned();
-                    let redacted_resp = Some(redact_or_keep(&resp_text, policy_store));
+                    let redacted_resp = Some(redact_or_keep(&resp_text, policy_store, app_id));
 
                     let pcl_url = format!("{}{}", provider.endpoint.trim_end_matches('/'), adapter.chat_path());
                     log_writer.log_provider_call(
@@ -725,7 +725,7 @@ pub async fn forward_with_fallback(
                         false,
                         Some(&format!("Client error {}", status.as_u16())),
                     );
-                    let redacted_user_prompt_4xx = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store));
+                    let redacted_user_prompt_4xx = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store, app_id));
                      log_writer.log_entry(LogEntry {
                         request_id: request_id.to_string(),
                         app_id: app_id.to_string(),
@@ -766,7 +766,7 @@ pub async fn forward_with_fallback(
                 let body = resp.text().await.unwrap_or_default();
                 last_err = format!("{} ({}) returned {}: {}", slot, provider.name, status, body);
                 // G5 fix: redact PII from upstream response before logging
-                let redacted_resp = Some(redact_or_keep(&body, policy_store));
+                let redacted_resp = Some(redact_or_keep(&body, policy_store, app_id));
                 {
                     let pcl_url = format!("{}{}", provider.endpoint.trim_end_matches('/'), adapter.chat_path());
                     log_writer.log_provider_call(
@@ -791,7 +791,7 @@ pub async fn forward_with_fallback(
             Err(e) => {
                 let err_str = e.to_string();
                 last_err = format!("{} ({}) unreachable: {}", slot, provider.name, err_str);
-                let redacted = redact_or_keep(&err_str, policy_store);
+                let redacted = redact_or_keep(&err_str, policy_store, app_id);
                 let pcl_url = format!("{}{}", provider.endpoint.trim_end_matches('/'), adapter.chat_path());
                 log_provider_failure(
                     log_writer, request_id, app_id, app_name, provider, slot,
@@ -809,8 +809,8 @@ pub async fn forward_with_fallback(
 
     // G5/V3 fix: redact PII from accumulated error messages and user prompt before failure-path logging
     let (redacted_last_err, redacted_user_prompt_failure) = {
-        let last_err_redacted = Some(redact_or_keep(&last_err, policy_store));
-        let prompt_redacted = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store));
+        let last_err_redacted = Some(redact_or_keep(&last_err, policy_store, app_id));
+        let prompt_redacted = user_prompt.as_ref().map(|up| redact_or_keep(up, policy_store, app_id));
         (last_err_redacted, prompt_redacted)
     };
 

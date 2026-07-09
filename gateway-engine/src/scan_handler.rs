@@ -76,7 +76,7 @@ pub async fn handle_scan_request(
     // ── Same T2 intent analysis, gated by the app's enable_t2 flag ───────────
     let scan_summary = if auth.enable_t2 && t1_summary.final_decision != "block" {
         crate::agents::classification::t2_analyzer::run_t2_analysis(
-            client, &prompt, policy_store, &request_id, t1_summary, log_writer,
+            client, &prompt, policy_store, &request_id, t1_summary, log_writer, &auth.app_id,
         ).await
     } else {
         t1_summary
@@ -123,7 +123,7 @@ pub async fn handle_scan_request(
     tracing::warn!("[scan] {} app=\"{}\" verdict={} stage={:?} elapsed={}ms",
         request_id, auth.app_name, verdict, scan_summary.blocked_stage, elapsed);
 
-    let log_prompt = crate::agents::redaction::redact_option(&Some(prompt.clone()), policy_store);
+    let log_prompt = crate::agents::redaction::redact_option(&Some(prompt.clone()), policy_store, &auth.app_id);
     let threat_knowledge_matches_json: Option<String> = if scan_summary.semantic_matches.is_empty() {
         None
     } else {

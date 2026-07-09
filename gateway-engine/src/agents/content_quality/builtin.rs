@@ -16,7 +16,7 @@ pub async fn run_builtin_scan(
     client: &Client,
     policy_store: &DetectorStore,
     request_id: &str,
-    _app_id: &str,
+    app_id: &str,
     _app_name: &str,
     context: &str,
     response: &str,
@@ -46,7 +46,7 @@ pub async fn run_builtin_scan(
 
     let raw = llm_complete(
         client, &judge_provider, &effective_prompt, &user_prompt,
-        "content_quality", log_writer, Some(request_id), policy_store, max_tokens,
+        "content_quality", log_writer, Some(request_id), policy_store, app_id, max_tokens,
     ).await;
 
     let text = match raw {

@@ -228,17 +228,17 @@ pub fn redact_string(text: &str, detectors: &[DetectorConfig]) -> Option<String>
     if matched { Some(result.into_owned()) } else { None }
 }
 
-/// Redact sensitive text from an Option<String> using all redact-mode regex detectors.
+/// Redact sensitive text from an Option<String> using the app's active redact-mode regex detectors.
 ///
 /// Returns None if the input is None or no detectors match. Otherwise returns Some(redacted_string).
-pub fn redact_option(text: &Option<String>, policy_store: &crate::policy::DetectorStore) -> Option<String> {
-    text.as_ref().map(|s| redact_or_keep(s, policy_store))
+pub fn redact_option(text: &Option<String>, policy_store: &crate::policy::DetectorStore, app_id: &str) -> Option<String> {
+    text.as_ref().map(|s| redact_or_keep(s, policy_store, app_id))
 }
 
-/// Redact text using the policy store's redact-mode regex detectors.
+/// Redact text using the policy store's redact-mode regex detectors active for `app_id`.
 /// Returns the redacted text if any redactions applied, otherwise returns the original.
-pub fn redact_or_keep(text: &str, policy_store: &crate::policy::DetectorStore) -> String {
-    let detectors = policy_store.redact_detectors();
+pub fn redact_or_keep(text: &str, policy_store: &crate::policy::DetectorStore, app_id: &str) -> String {
+    let detectors = policy_store.redact_detectors(app_id);
     if detectors.is_empty() {
         return text.to_string();
     }

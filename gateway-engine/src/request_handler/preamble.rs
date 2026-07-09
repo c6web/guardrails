@@ -487,7 +487,7 @@ pub(crate) async fn prepare(
     let prefill_result = crate::content::extraction::detect_assistant_prefill(&req_json);
     if prefill_result.detected {
         tracing::warn!("[prefill] {} BLOCKED: {}", request_id, prefill_result.reason);
-        let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt, policy_store);
+        let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt, policy_store, &app_id);
         log_writer.log_entry(LogEntry {
             request_id: request_id.clone(),
             app_id: app_id.clone(),

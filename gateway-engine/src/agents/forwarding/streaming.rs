@@ -362,7 +362,7 @@ pub async fn forward_streaming(
 
                         if let Some(reply_text) = &stream_reply {
                             let scan_result = super::output_scan::scan_output_impl(
-                                &policy_store_clone, &request_id_for_scan, &app_name_owned, reply_text,
+                                &policy_store_clone, &request_id_for_scan, &app_id_owned, &app_name_owned, reply_text,
                             );
                             streaming_output_flagged    = scan_result.flagged;
                             streaming_output_framework_id.clone_from(&scan_result.category);
@@ -419,14 +419,14 @@ pub async fn forward_streaming(
                             }
 
                         // G5: Redact sensitive fields before logging (streaming fix)
-                        let redacted_user_prompt = user_prompt_owned.as_ref().map(|up| redact_or_keep(up, &policy_store_clone));
-                        let redacted_stream_reply = stream_reply.as_ref().map(|ar| redact_or_keep(ar, &policy_store_clone));
+                        let redacted_user_prompt = user_prompt_owned.as_ref().map(|up| redact_or_keep(up, &policy_store_clone, &app_id_owned));
+                        let redacted_stream_reply = stream_reply.as_ref().map(|ar| redact_or_keep(ar, &policy_store_clone, &app_id_owned));
 
                         // Provider-call audit log (full request/response payload for admin/auditor review) —
                         // streaming responses previously had no entry here at all.
                         let raw_sse_text = String::from_utf8_lossy(&sse_body).into_owned();
                         drop(sse_body); // last use was above — free the capped buffer before redaction allocates more copies
-                        let redacted_pcl_response = redact_or_keep(&raw_sse_text, &policy_store_clone);
+                        let redacted_pcl_response = redact_or_keep(&raw_sse_text, &policy_store_clone, &app_id_owned);
                         log_writer_owned.log_provider_call(
                             Some(&request_id_owned), "upstream", "pipeline",
                             Some(&app_id_owned), Some(&app_name_owned),
@@ -535,7 +535,7 @@ pub async fn forward_streaming(
                 };
 
                 let body_text = resp.text().await.unwrap_or_default();
-                let redacted_resp = Some(redact_or_keep(&body_text, policy_store));
+                let redacted_resp = Some(redact_or_keep(&body_text, policy_store, app_id));
                 let pcl_url = format!("{}{}", provider.endpoint.trim_end_matches('/'), adapter.stream_path());
                 log_provider_failure(
                     log_writer, request_id, app_id, app_name, provider, slot,
@@ -551,7 +551,7 @@ pub async fn forward_streaming(
             Err(e) => {
                 tracing::warn!("[forward] {} FAILED {} provider: \"{}\" error={}", request_id, slot, provider.name, e);
                 let err_str = e.to_string();
-                let redacted = redact_or_keep(&err_str, policy_store);
+                let redacted = redact_or_keep(&err_str, policy_store, app_id);
                 let pcl_url = format!("{}{}", provider.endpoint.trim_end_matches('/'), adapter.stream_path());
                 log_provider_failure(
                     log_writer, request_id, app_id, app_name, provider, slot,
@@ -568,7 +568,7 @@ pub async fn forward_streaming(
 
     let elapsed = start_time.elapsed().as_millis() as i64;
     // G5: redact sensitive fields (user_prompt) for logging.
-    let log_user_prompt = crate::agents::redaction::redact_option(user_prompt, policy_store);
+    let log_user_prompt = crate::agents::redaction::redact_option(user_prompt, policy_store, app_id);
     log_writer.log_entry(LogEntry {
         request_id: request_id.to_string(),
         app_id: app_id.to_string(),

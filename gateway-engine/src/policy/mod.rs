@@ -326,11 +326,20 @@ impl DetectorStore {
         self.providers_by_id.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
     }
 
-    /// Return a cloned vec of regex redact-mode detectors.
-    pub fn redact_detectors(&self) -> Vec<DetectorConfig> {
-        self.detectors.read().unwrap_or_else(|e| e.into_inner())
-            .iter()
+    /// Return a cloned vec of regex redact-mode detectors active for `app_id`,
+    /// honoring the same per-app detector selection (`app_detector_ids`) used
+    /// by the enforcement/output-scan paths — an app that has disabled a
+    /// detector must not have it silently re-applied here (e.g. for log
+    /// redaction).
+    pub fn redact_detectors(&self, app_id: &str) -> Vec<DetectorConfig> {
+        let all_detectors = self.detectors.read().unwrap_or_else(|e| e.into_inner());
+        let app_detector_map = self.app_detector_ids.read().unwrap_or_else(|e| e.into_inner());
+        all_detectors.iter()
             .filter(|d| d.rule_type == "regex" && d.mode == "redact")
+            .filter(|d| match app_detector_map.get(app_id) {
+                None => true,                    // no override — all active detectors
+                Some(ids) => ids.contains(&d.id), // app override — only selected detectors
+            })
             .cloned()
             .collect()
     }

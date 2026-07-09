@@ -174,7 +174,7 @@ pub async fn handle_classification_test(
 
     if provider.is_none() {
             // G5: redact sensitive fields (prompt) for logging.
-            let log_prompt = crate::agents::redaction::redact_option(&prompt_opt, policy_store);
+            let log_prompt = crate::agents::redaction::redact_option(&prompt_opt, policy_store, &auth.app_id);
             tracing::warn!("[test] 503 NO_CLASSIFIER app=\"{}\" ip={}", auth.app_name, source_ip);
             log_writer.log_blocked(
                 &request_id, &auth.app_id, &auth.app_name, "classifier", &method, &path, &source_ip,
@@ -188,7 +188,7 @@ pub async fn handle_classification_test(
     }
 
     let start = Instant::now();
-    let result = classify(client, &prompt, provider.as_ref(), threshold, &system_prompt, log_writer, None, policy_store).await;
+    let result = classify(client, &prompt, provider.as_ref(), threshold, &system_prompt, log_writer, None, policy_store, &auth.app_id).await;
     let elapsed = start.elapsed().as_millis() as i64;
 
     match result {
@@ -214,7 +214,7 @@ pub async fn handle_classification_test(
                 request_id, auth.app_name, verdict, r.framework_id, r.confidence, elapsed);
 
             // G5: redact sensitive fields (prompt) for logging.
-            let log_prompt = crate::agents::redaction::redact_option(&prompt_opt, policy_store);
+            let log_prompt = crate::agents::redaction::redact_option(&prompt_opt, policy_store, &auth.app_id);
             let lw_action = Some("classification-test".to_string());
             let lw_detector = if r.framework_id.is_empty() { None } else { Some(r.framework_id.clone()) };
             let lw_framework_id = if r.framework_id.is_empty() { None } else { Some(r.framework_id.clone()) };
@@ -248,7 +248,7 @@ pub async fn handle_classification_test(
         Err(e) => {
             tracing::warn!("[test] {} CLASSIFIER_TEST_FAILED app=\"{}\" error={}", request_id, auth.app_name, e);
             // G5: redact sensitive fields (prompt) for logging.
-            let log_prompt = crate::agents::redaction::redact_option(&prompt_opt, policy_store);
+            let log_prompt = crate::agents::redaction::redact_option(&prompt_opt, policy_store, &auth.app_id);
             log_writer.log_entry(LogEntry {
                 request_id: request_id.clone(),
                 app_id: auth.app_id.clone(),

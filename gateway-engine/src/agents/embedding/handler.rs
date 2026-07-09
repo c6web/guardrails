@@ -244,7 +244,7 @@ pub async fn handle_embedding_request(
 
     // G5: redact sensitive fields (audit_input) for logging.
     let audit_input_opt = Some(audit_input.clone());
-    let log_audit_input = crate::agents::redaction::redact_option(&audit_input_opt, policy_store);
+    let log_audit_input = crate::agents::redaction::redact_option(&audit_input_opt, policy_store, &app_id);
 
     // Generate an embedding per input item.
     let mut data = Vec::with_capacity(inputs.len());

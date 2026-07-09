@@ -147,6 +147,10 @@ export interface TrafficRow {
   contentQualityFlagged: boolean;
   contentQualityAction: string | null;           // 'blocked' | 'redacted' | 'flagged' | 'monitored' | null
   contentQualityReason: string | null;
+  outputScanFlagged: boolean;
+  outputScanFrameworkId: string | null;
+  outputScanConfidence: number | null;
+  outputScanDetector: string | null;
 }
 
 export interface PipelineTrace {

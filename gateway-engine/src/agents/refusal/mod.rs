@@ -41,6 +41,7 @@ pub async fn generate_refusal(
     threat_reason: Option<&str>,
     user_prompt:  &str,
     log_writer:   &LogWriter,
+    app_id:       &str,
 ) -> String {
     let provider = {
         let guard = policy_store.classifier_provider.read().unwrap_or_else(|e| e.into_inner());
@@ -71,6 +72,7 @@ pub async fn generate_refusal(
         log_writer,
         Some(request_id),
         policy_store,
+        app_id,
         crate::constants::REFUSAL_GENERATION_MAX_OUTPUT_TOKENS,
     )
     .await

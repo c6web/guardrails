@@ -72,7 +72,11 @@ export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification
               <span className="mono here">{row.id}</span>
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, letterSpacing: '-0.01em', marginBottom: 6 }}>
-              {row.flag && row.threat ? row.threat.title : row.pipelineTrace ? 'Request passed all detectors' : row.action === 'blocked' ? (row.threatTitle ?? 'Request blocked') : 'Not evaluated'}
+              {row.flag && row.threat ? row.threat.title
+                : row.flag ? (row.threatTitle ?? 'Request flagged')
+                : row.pipelineTrace ? 'Request passed all detectors'
+                : row.action === 'blocked' || row.action === 'soft_declined' ? (row.threatTitle ?? 'Request blocked')
+                : 'Not evaluated'}
             </div>
             <div className="row-tight" style={{ gap: 6, flexWrap: 'wrap' }}>
               {row.flag && row.threat && <OwaspPill id={row.threat.framework_id} withName />}
@@ -146,11 +150,14 @@ export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification
                   </pre>
                 )}
               </div>
-            ) : row.pipelineTrace && !row.flag ? (
-              <div className="card" style={{ padding: 14, borderColor: 'var(--accent)', background: 'var(--success-bg)', marginBottom: 16 }}>
+            ) : row.pipelineTrace ? (
+              <div className="card" style={{ padding: 14, borderColor: row.flag ? 'var(--warning)' : 'var(--accent)', background: row.flag ? 'var(--warning-bg)' : 'var(--success-bg)', marginBottom: 16 }}>
                 <div className="row-tight">
-                  <ShieldCheck w={15} style={{ color: 'var(--accent)' }} />
-                  <span style={{ fontWeight: 600 }}>Allowed · {row.pipelineTrace.stages.length} layer{row.pipelineTrace.stages.length !== 1 ? 's' : ''} checked</span>
+                  <ShieldCheck w={15} style={{ color: row.flag ? 'var(--warning)' : 'var(--accent)' }} />
+                  <span style={{ fontWeight: 600 }}>{row.flag ? (row.action === 'blocked' || row.action === 'soft_declined'
+                    ? `Blocked — ${row.threatTitle ?? 'request blocked'}`
+                    : `Flagged — ${row.threatTitle ?? row.action ?? 'request flagged'}`)
+                    : `Allowed · ${row.pipelineTrace.stages.length} layer${row.pipelineTrace.stages.length !== 1 ? 's' : ''} checked`}</span>
                 </div>
                 <div className="caption" style={{ marginTop: 4 }}>
                   {(() => {
@@ -159,9 +166,21 @@ export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification
                     if (present.length === 0) return 'No scan layers were active for this request.'
                     const last = present.pop()!
                     const layers = present.length ? present.join(', ') + ' and ' : ''
-                    return `No matches across ${layers}${last} layers.${row.upstreamProviderName ? ` Forwarded to ${row.upstreamProviderName}.` : ''}`
+                    return row.flag ? `Evaluated by detection pipeline — ${layers}${last} layers.${row.upstreamProviderName ? ` Forwarded to ${row.upstreamProviderName}.` : ''}`
+                      : `No matches across ${layers}${last} layers.${row.upstreamProviderName ? ` Forwarded to ${row.upstreamProviderName}.` : ''}`
                   })()}
                 </div>
+                {row.outputScanFlagged && row.outputScanDetector && (
+                  <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 5, background: 'var(--bg-sunken)', fontSize: 12, lineHeight: 1.5 }}>
+                    Output scan: <span style={{ fontWeight: 600 }}>{row.outputScanDetector}</span>
+                    {row.outputScanFrameworkId && (
+                      <> · <OwaspPill id={row.outputScanFrameworkId} /></>
+                    )}
+                    {row.outputScanConfidence != null && (
+                      <> · conf {(row.outputScanConfidence * 100).toFixed(0)}%</>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="card" style={{ padding: 14, borderColor: row.flag ? 'var(--danger)' : 'var(--border-subtle)', background: row.flag ? 'var(--danger-bg)' : 'var(--bg-secondary)', marginBottom: 16 }}>
@@ -170,9 +189,7 @@ export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification
                   <span style={{ fontWeight: 600 }}>{row.flag ? `Blocked — ${row.threatTitle ?? 'request blocked'}` : 'Not evaluated · no detection data recorded'}</span>
                 </div>
                 <div className="caption" style={{ marginTop: 4 }}>
-                  {row.flag
-                    ? row.pipelineTrace ? 'Request was evaluated and blocked by detection pipeline.' : 'Request did not reach the detection pipeline; no detectors ran.'
-                    : 'No pipeline trace was recorded for this request.'}
+                  {row.flag ? 'Request did not reach the detection pipeline; no detectors ran.' : 'No pipeline trace was recorded for this request.'}
                 </div>
               </div>
             )}

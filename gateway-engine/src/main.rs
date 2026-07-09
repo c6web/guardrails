@@ -1219,7 +1219,7 @@ async fn not_found(
             if response_ct.contains("application/json") || response_ct.contains("text/") {
                 let response_text = extract_passthrough_text(&body_bytes, &resp_headers);
                 if !response_text.is_empty() {
-                    let scan_result = scan_output_impl(&state.policy_store, &request_id, &auth.app_name, &response_text);
+                    let scan_result = scan_output_impl(&state.policy_store, &request_id, &auth.app_id, &auth.app_name, &response_text);
                     output_scan_flagged = scan_result.flagged;
                     output_scan_detector = scan_result.detector_name;
                     output_scan_framework_id = scan_result.category;

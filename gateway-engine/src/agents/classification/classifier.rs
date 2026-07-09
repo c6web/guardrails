@@ -49,6 +49,7 @@ pub async fn llm_complete(
     log_writer:        &crate::tools::log_writer::LogWriter,
     request_id:        Option<&str>,
     policy_store:      &DetectorStore,
+    app_id:            &str,
     target_max_tokens: i32,
 ) -> Result<String, String> {
     if let Some(max_input_token) = provider.max_input_token {
@@ -89,23 +90,54 @@ pub async fn llm_complete(
     let req_str  = serde_json::to_string(&body).unwrap_or_default();
 
     // G5 fix: redact PII from request/response before logging provider calls
-    let redacted_req_str = Some(redact_or_keep(&req_str, policy_store));
+    let redacted_req_str = Some(redact_or_keep(&req_str, policy_store, app_id));
 
-    let mut req = client.post(&url).body(serde_json::to_vec(&body).unwrap_or_default());
-    for (name, value) in adapter.build_headers(provider) {
-        req = req.header(name, value);
-    }
-    if provider.timeout_ms > 0 {
-        req = req.timeout(std::time::Duration::from_millis(provider.timeout_ms));
-    }
+    // Transport-level failures (including client-side timeout) are retried —
+    // slow-but-working classifier endpoints otherwise get treated as fully
+    // down on any response past `timeout_ms`. Non-success HTTP statuses are
+    // NOT retried here; those are handled separately below.
+    const MAX_ATTEMPTS: u32 = 3;
+    const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
     let call_start = std::time::Instant::now();
-    let send_result = req.send().await;
+    let mut send_result = None;
+    let mut attempts_made: u32 = 0;
+    for attempt in 1..=MAX_ATTEMPTS {
+        attempts_made = attempt;
+        let mut req = client.post(&url).body(serde_json::to_vec(&body).unwrap_or_default());
+        for (name, value) in adapter.build_headers(provider) {
+            req = req.header(name, value);
+        }
+        if provider.timeout_ms > 0 {
+            req = req.timeout(std::time::Duration::from_millis(provider.timeout_ms));
+        }
+        match req.send().await {
+            Ok(r) => {
+                send_result = Some(Ok(r));
+                break;
+            }
+            Err(e) if attempt < MAX_ATTEMPTS => {
+                tracing::warn!(
+                    "[llm_complete] {} send failed (attempt {}/{}) provider=\"{}\" timeout={}: {} — retrying in {}s",
+                    request_id.unwrap_or("n/a"), attempt, MAX_ATTEMPTS, provider.name, e.is_timeout(), e, RETRY_DELAY.as_secs()
+                );
+                tokio::time::sleep(RETRY_DELAY).await;
+            }
+            Err(e) => send_result = Some(Err(e)),
+        }
+    }
+    let send_result = send_result.expect("loop always assigns before exiting");
 
     let resp = match send_result {
         Err(e) => {
             let elapsed = call_start.elapsed().as_millis() as i64;
-            let err_str = e.to_string();
+            let is_timeout = e.is_timeout();
+            let kind_tag = if is_timeout {
+                format!("timeout after {}ms", provider.timeout_ms)
+            } else {
+                "connection error".to_string()
+            };
+            let err_str = format!("[{}] {} (attempts={})", kind_tag, e, attempts_made);
             log_writer.log_provider_call(
                 request_id, call_type, "pipeline",
                 None, None,
@@ -115,6 +147,10 @@ pub async fn llm_complete(
                 redacted_req_str.clone(), None,
                 None, None, elapsed, None, false,
                 Some(&err_str),
+            );
+            tracing::warn!(
+                "[llm_complete] {} FAILED provider=\"{}\" {} after {} attempt(s), elapsed={}ms",
+                request_id.unwrap_or("n/a"), provider.name, kind_tag, attempts_made, elapsed
             );
             return Err(format!("LLM request failed: {}", err_str));
         }
@@ -126,7 +162,7 @@ pub async fn llm_complete(
         let body_text  = resp.text().await.unwrap_or_default();
         let elapsed    = call_start.elapsed().as_millis() as i64;
         // G5 fix: redact PII from response before logging
-        let redacted_resp = Some(redact_or_keep(&body_text, policy_store));
+        let redacted_resp = Some(redact_or_keep(&body_text, policy_store, app_id));
         log_writer.log_provider_call(
             request_id, call_type, "pipeline",
             None, None,
@@ -149,7 +185,7 @@ pub async fn llm_complete(
     let (tin, tout) = adapter.extract_usage(&parsed);
     // G5 fix: redact PII from response before logging
     let resp_json = serde_json::to_string(&parsed).unwrap_or_default();
-    let redacted_resp = Some(redact_or_keep(&resp_json, policy_store));
+    let redacted_resp = Some(redact_or_keep(&resp_json, policy_store, app_id));
     log_writer.log_provider_call(
         request_id, call_type, "pipeline",
         None, None,
@@ -178,13 +214,14 @@ pub async fn classify(
     log_writer:    &crate::tools::log_writer::LogWriter,
     request_id:    Option<&str>,
     policy_store:  &DetectorStore,
+    app_id:        &str,
 ) -> Result<ClassifyResult, String> {
     let Some(p) = provider else {
         return Ok(ClassifyResult { is_attack: false, framework_id: String::new(), confidence: 0.0, reason: String::new() });
     };
 
     let raw_content = match llm_complete(
-        client, p, system_prompt, prompt, "classifier", log_writer, request_id, policy_store,
+        client, p, system_prompt, prompt, "classifier", log_writer, request_id, policy_store, app_id,
         crate::constants::CLASSIFICATION_MAX_OUTPUT_TOKENS,
     ).await {
         Ok(content) => content,

@@ -43,6 +43,10 @@ interface ApiLog {
   content_quality_flagged: boolean | null
   content_quality_action: string | null
   content_quality_reason: string | null
+  output_scan_flagged: boolean | null
+  output_scan_framework_id: string | null
+  output_scan_confidence: number | null
+  output_scan_detector: string | null
 }
 
 function mapTrafficRow(l: ApiLog): TrafficRow {
@@ -108,6 +112,10 @@ function mapTrafficRow(l: ApiLog): TrafficRow {
     contentQualityFlagged: l.content_quality_flagged ?? false,
     contentQualityAction: l.content_quality_action ?? null,
     contentQualityReason: l.content_quality_reason ?? null,
+    outputScanFlagged: l.output_scan_flagged ?? false,
+    outputScanFrameworkId: l.output_scan_framework_id ?? null,
+    outputScanConfidence: l.output_scan_confidence ?? null,
+    outputScanDetector: l.output_scan_detector ?? null,
   }
 }
 

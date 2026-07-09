@@ -336,10 +336,15 @@ function RequestDrawer({ req, open, onClose, onOpenIncident }: { req: TrafficRow
                 <div className="caption" style={{ marginTop: 6 }}>Request did not complete successfully — upstream or gateway returned an error response.</div>
               </div>
             ) : req.pipelineTrace ? (
-              <div className="card" style={{ padding: 14, borderColor: "var(--accent)", background: "var(--success-bg)" }}>
+              <div className="card" style={{ padding: 14, borderColor: req.flag ? "var(--warning)" : "var(--accent)", background: req.flag ? "var(--warning-bg)" : "var(--success-bg)" }}>
                 <div className="row-tight">
-                  <ShieldCheck w={16} style={{ color: "var(--accent)" }} />
-                  <span style={{ fontWeight: 600 }}>Allowed · {req.pipelineTrace.stages.length} layer{req.pipelineTrace.stages.length !== 1 ? 's' : ''} checked</span>
+                  <ShieldCheck w={16} style={{ color: req.flag ? "var(--warning)" : "var(--accent)" }} />
+                  <span style={{ fontWeight: 600 }}>
+                    {req.flag ? (req.action === 'blocked' || req.action === 'soft_declined'
+                      ? `Blocked — ${req.threatTitle ?? 'request blocked'}`
+                      : `Flagged — ${req.threatTitle ?? req.action ?? 'request flagged'}`)
+                      : `Allowed · ${req.pipelineTrace.stages.length} layer${req.pipelineTrace.stages.length !== 1 ? 's' : ''} checked`}
+                  </span>
                 </div>
                 <div className="caption" style={{ marginTop: 6 }}>
                   {(() => {
@@ -347,9 +352,23 @@ function RequestDrawer({ req, open, onClose, onOpenIncident }: { req: TrafficRow
                     const present = req.pipelineTrace!.stages.filter(s => s.decision !== 'skipped' && s.stage !== 'cache_lookup').map(s => stageNames[s.stage] ?? s.stage)
                     if (present.length === 0) return 'No scan layers were active for this request.'
                     const last = present.pop()!
+                    if (req.flag) {
+                      return `Evaluated by detection pipeline — ${present.length ? present.join(', ') + ' and ' : ''}${last} layers. Forwarded to upstream.`
+                    }
                     return `No matches across ${present.length ? present.join(', ') + ' and ' : ''}${last} layers. Forwarded to upstream.`
                   })()}
                 </div>
+                {req.outputScanFlagged && req.outputScanDetector && (
+                  <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 5, background: 'var(--bg-sunken)', fontSize: 12, lineHeight: 1.5 }}>
+                    Output scan: <span style={{ fontWeight: 600 }}>{req.outputScanDetector}</span>
+                    {req.outputScanFrameworkId && (
+                      <> · <OwaspPill id={req.outputScanFrameworkId} /></>
+                    )}
+                    {req.outputScanConfidence != null && (
+                      <> · conf {(req.outputScanConfidence * 100).toFixed(0)}%</>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="card" style={{ padding: 14, borderColor: "var(--border-subtle)", background: "var(--bg-secondary)" }}>
@@ -604,9 +623,11 @@ const TrafficPageContent: React.FC<TrafficPageProps> = () => {
                             </span>
                           : r.code >= 400
                             ? <Chip kind="err" mono>error</Chip>
-                            : r.cacheHit
-                              ? <Chip kind="info" mono>cache · {r.cacheTier ?? '?'}</Chip>
-                              : <Chip kind="ok" mono>pass</Chip>
+                            : r.flag
+                              ? <Chip kind={r.action === 'blocked' || r.action === 'soft_declined' ? "err" : "warn"} mono>{r.action === 'blocked' || r.action === 'soft_declined' ? "blocked" : r.action ?? "flagged"}</Chip>
+                              : r.cacheHit
+                                ? <Chip kind="info" mono>cache · {r.cacheTier ?? '?'}</Chip>
+                                : <Chip kind="ok" mono>pass</Chip>
                       )}
                     </td>
                   ))}

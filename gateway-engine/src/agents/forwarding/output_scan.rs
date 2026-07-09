@@ -8,9 +8,12 @@ use crate::policy::{DetectorConfig, DetectorStore};
 use crate::agents::scanning::output_scanner::{scan_with_detector_configs, OutputScanResult};
 
 /// Scan the assistant reply against output-scoped detectors (scanning_scope = "output" or "both").
+/// Respects per-app detector overrides via `app_detector_ids` — an app with `detectors_custom=true`
+/// and no output-scope selections effectively has output scanning disabled.
 pub fn scan_output_impl(
     policy_store: &DetectorStore,
     request_id: &str,
+    app_id: &str,
     app_name: &str,
     reply: &str,
 ) -> OutputScanResult {
@@ -27,8 +30,15 @@ pub fn scan_output_impl(
     // Output scanning using regular detectors with scanning_scope = "output" or "both"
     {
         let all_detectors = policy_store.detectors.read().unwrap_or_else(|e| e.into_inner());
+        let app_detector_map = policy_store.app_detector_ids.read().unwrap_or_else(|e| e.into_inner());
         let scoped: Vec<DetectorConfig> = all_detectors.iter()
             .filter(|d| d.scanning_scope == "output" || d.scanning_scope == "both")
+            .filter(|d| {
+                match app_detector_map.get(app_id) {
+                    None => true,                                 // no override — all active detectors
+                    Some(ids) => ids.contains(&d.id),             // app override — only selected detectors
+                }
+            })
             .cloned().collect();
 
         let app_result = scan_with_detector_configs(&scoped, reply);

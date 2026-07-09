@@ -59,7 +59,7 @@ pub(crate) async fn run_security_pipeline(
     if let Some(max_tokens) = auth.max_tokens {
         let approx_tokens = estimate_token_count(&prompt_text);
         if approx_tokens > (max_tokens as usize) {
-            let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt, policy_store);
+            let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt, policy_store, &app_id);
             tracing::warn!("[token]   {} EXCEEDS_MAX_TOKENS app=\"{}\" tokens={} max={}", request_id, app_name, approx_tokens, max_tokens);
             log_writer.log_entry(LogEntry {
                 request_id: request_id.clone(),
@@ -114,7 +114,7 @@ pub(crate) async fn run_security_pipeline(
                 let result = tool_guard.check_request(&parsed);
 
                 if !result.tool_names.is_empty() {
-                    let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt, policy_store);
+                    let log_user_prompt = crate::agents::redaction::redact_option(&user_prompt, policy_store, &app_id);
                     match app_mode.as_str() {
                         "guard" | "block" if !result.allowed => {
                             tracing::warn!("[tool_guard] {} BLOCKED app=\"{}\" violations={:?}", request_id, app_name, result.violations);
@@ -357,7 +357,7 @@ pub(crate) async fn run_security_pipeline(
         // bypassing T2 (DET-1b). If T2 blocks, redirect to enforcement.
         if app_enable_t2 {
             let t2_on_cache = crate::agents::classification::t2_analyzer::run_t2_analysis(
-                client, &prompt_text, policy_store, &request_id, t1_summary.clone(), log_writer,
+                client, &prompt_text, policy_store, &request_id, t1_summary.clone(), log_writer, &app_id,
             ).await;
             if t2_on_cache.final_decision == "block" {
                 tracing::warn!(
@@ -499,7 +499,7 @@ pub(crate) async fn run_security_pipeline(
     // ── T2 Intent Analysis (per-app opt-in, runs only when T1 allows) ────────
     let scan_summary = if app_enable_t2 && t1_summary.final_decision != "block" {
         crate::agents::classification::t2_analyzer::run_t2_analysis(
-            client, &prompt_text, policy_store, &request_id, t1_summary, log_writer,
+            client, &prompt_text, policy_store, &request_id, t1_summary, log_writer, &app_id,
         ).await
     } else {
         t1_summary

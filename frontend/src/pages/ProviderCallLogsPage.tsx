@@ -8,7 +8,7 @@ import { fmtTsStr, fmtAgeFromIso } from '../utils/format'
 import { ConfirmModal, Toast } from './components/ProviderShared'
 import { DeleteLogsModal } from '../components/DeleteLogsModal'
 import type { TweakValues } from '../types'
-import { callTypeKind, fmtMs, Pagination, DetailDrawer } from './components/ProviderCallLogPrimitives'
+import { callTypeKind, fmtMs, Pagination, DetailDrawer, isTimeoutError } from './components/ProviderCallLogPrimitives'
 
 interface ProviderCallLogsPageProps { tweaks: TweakValues }
 
@@ -204,7 +204,12 @@ export default function ProviderCallLogsPage(_props: ProviderCallLogsPageProps) 
     {
       key: 'status',
       label: 'Status',
-      render: (row) => row.success ? <Chip kind="ok" dot>OK</Chip> : <Chip kind="err" dot>Err</Chip>,
+      render: (row) => row.success
+        ? <Chip kind="ok" dot>OK</Chip>
+        : <span style={{ display: 'flex', gap: 4 }}>
+            <Chip kind="err" dot>Err</Chip>
+            {isTimeoutError(row.error_message) && <Chip kind="warn">Timeout</Chip>}
+          </span>,
     },
     {
       key: 'source',
