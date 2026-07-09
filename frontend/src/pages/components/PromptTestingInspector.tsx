@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Chip, LoadingState } from '../../components/ui'
-import { Shield, ShieldCheck, Eye, Bolt, Filter, BookOpen, ZapRi, Cpu } from '../../components/ui/Icons'
+import { Shield, ShieldCheck, Eye, Bolt, Filter, BookOpen, ZapRi, Cpu, Network, Settings, Terminal } from '../../components/ui/Icons'
 import type { App, AppDetectorItem, AppThreatKnowledgeItem, AppToolGuardrailItem } from '../../types'
+import type { AiProvider } from '../../api/aiProviders'
 import { getAppDetectors, getAppThreatKnowledge, getAppToolGuardrails } from '../../api/apps'
+import { getProviders } from '../../api/providers'
 
 type ChipKind = 'ok' | 'warn' | 'muted'
 
@@ -48,11 +50,21 @@ function emptyRow(text: string) {
   return <div style={{ fontSize: 11, color: 'var(--fg-tertiary)', padding: '10px 12px' }}>{text}</div>
 }
 
+function InfoRow({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 11, borderBottom: '1px solid var(--border-subtle)' }}>
+      <span style={{ color: 'var(--fg-tertiary)', minWidth: 110, flexShrink: 0 }}>{label}</span>
+      <span style={{ flex: 1, fontWeight: 500, color: color ?? 'var(--fg-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
+    </div>
+  )
+}
+
 export function PromptTestingInspector({ app }: { app: App | null }) {
   const [loading, setLoading] = useState(false)
   const [dets, setDets]       = useState<AppDetectorItem[]>([])
   const [tk, setTk]           = useState<AppThreatKnowledgeItem[]>([])
   const [tools, setTools]     = useState<AppToolGuardrailItem[]>([])
+  const [providers, setProviders] = useState<Record<string, AiProvider>>({})
 
   useEffect(() => {
     if (!app) return
@@ -62,9 +74,11 @@ export function PromptTestingInspector({ app }: { app: App | null }) {
       getAppDetectors(app.id),
       getAppThreatKnowledge(app.id),
       getAppToolGuardrails(app.id),
-    ]).then(([d, k, t]) => {
+      getProviders(),
+    ]).then(([d, k, t, p]) => {
       if (cancelled) return
       setDets(d.data); setTk(k.data); setTools(t.data)
+      setProviders(Object.fromEntries(p.map(pr => [pr.id, pr])))
     }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [app?.id])
@@ -89,6 +103,22 @@ export function PromptTestingInspector({ app }: { app: App | null }) {
   const ModeIcon = mode.Icon
   const scanSkipped = app.mode === 'bypass'
 
+  const renderProviderRow = (label: string, providerId: string | null | undefined) => {
+    const p = providerId ? providers[providerId] : null
+    return (
+      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--border-subtle)', fontSize: 11 }}>
+        <span style={{ color: 'var(--fg-tertiary)', minWidth: 48, flexShrink: 0 }}>{label}</span>
+        {p ? (
+          <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {p.vendor} · {p.model ?? p.name}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--fg-tertiary)' }}>—</span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="card-hdr"><h3>Policy Inspector</h3></div>
@@ -108,6 +138,48 @@ export function PromptTestingInspector({ app }: { app: App | null }) {
           <LoadingState message="Loading policy…" size="sm" />
         ) : (
           <>
+            {/* Upstream Providers */}
+            {app.primaryProviderId || app.backup1ProviderId || app.backup2ProviderId ? (
+              <Section
+                icon={<Network w={13} style={{ color: 'var(--fg-secondary)' }} />}
+                title="Upstream Providers"
+                count={[app.primaryProviderId, app.backup1ProviderId, app.backup2ProviderId].filter(Boolean).length}
+              >
+                <ListBox>
+                  {renderProviderRow('Primary', app.primaryProviderId)}
+                  {renderProviderRow('Backup 1', app.backup1ProviderId)}
+                  {renderProviderRow('Backup 2', app.backup2ProviderId)}
+                </ListBox>
+              </Section>
+            ) : null}
+
+            {/* Capabilities */}
+            <Section
+              icon={<Settings w={13} style={{ color: 'var(--fg-secondary)' }} />}
+              title="Capabilities"
+              count={[app.enableT2, app.enableResponseCache, app.enableContentQualityScan].filter(Boolean).length}
+            >
+              <InfoRow label="T2 Intent Analysis"
+                value={<Chip kind={app.enableT2 ? 'ok' : 'muted'}>{app.enableT2 ? 'Enabled' : 'Disabled'}</Chip>} />
+              <InfoRow label="Response Cache"
+                value={<Chip kind={app.enableResponseCache ? 'ok' : 'muted'}>{app.enableResponseCache ? `Enabled (TTL: ${app.cacheTtlSeconds ?? 'default'}s)` : 'Disabled'}</Chip>} />
+              {app.enableResponseCache && app.multiTurnSemanticEnabled && (
+                <InfoRow label="Multi-turn Semantic" value={<Chip kind="ok">Enabled</Chip>} />
+              )}
+              <InfoRow label="Content Quality Scan"
+                value={<Chip kind={app.enableContentQualityScan ? 'ok' : 'muted'}>{app.enableContentQualityScan ? `${app.contentQualityScanMode ?? 'flag'} (threshold: ${app.contentQualityScanThreshold ?? 'default'})` : 'Disabled'}</Chip>} />
+            </Section>
+
+            {/* Limits */}
+            <Section
+              icon={<Terminal w={13} style={{ color: 'var(--fg-secondary)' }} />}
+              title="Limits"
+              count={[app.maxTokens, app.maxPayloadSize].filter(v => v != null).length}
+            >
+              <InfoRow label="Max Tokens" value={app.maxTokens ?? 'Unlimited'} />
+              <InfoRow label="Max Payload Size" value={app.maxPayloadSize ? `${(app.maxPayloadSize / (1024 * 1024)).toFixed(0)} MB` : 'Unlimited'} />
+            </Section>
+
             {/* Scanners */}
             <Section
               icon={<Filter w={13} style={{ color: 'var(--fg-secondary)' }} />}
