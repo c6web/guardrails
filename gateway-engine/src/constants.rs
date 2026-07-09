@@ -9,9 +9,9 @@
 //! directly as an output value.
 
 /// Max output tokens requested for the primary OWASP classification LLM call.
-pub const CLASSIFICATION_MAX_OUTPUT_TOKENS: i32 = 10240;
+pub const CLASSIFICATION_MAX_OUTPUT_TOKENS: i32 = 30720;
 /// Max output tokens requested for the T2 intent-analysis LLM call.
-pub const T2_ANALYSIS_MAX_OUTPUT_TOKENS: i32 = 10240;
+pub const T2_ANALYSIS_MAX_OUTPUT_TOKENS: i32 = 30720;
 /// Max output tokens requested for the knowledge-development LLM call.
 pub const KNOWLEDGE_DEV_MAX_OUTPUT_TOKENS: i32 = 10240;
 /// Default output-token request for normal forwarding when the client omits
