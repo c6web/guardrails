@@ -206,6 +206,16 @@ export function RowDetail({ row, open, onClose, onDelete, onUpdateClassification
                 <div style={{ color: 'var(--fg-secondary)', lineHeight: 1.5 }}>{row.t2Reason}</div>
               </div>
             )}
+            {row.threatKnowledgeMatches && row.threatKnowledgeMatches.length > 0 && (
+              <div style={{ marginBottom: 16, padding: '10px 12px', borderRadius: 6, background: 'var(--bg-sunken)', border: '1px solid var(--border-subtle)', fontSize: 12 }}>
+                <div className="label" style={{ marginBottom: 6 }}>Matched threat knowledge</div>
+                <div className="row-tight" style={{ flexWrap: 'wrap', gap: 6 }}>
+                  {row.threatKnowledgeMatches.slice(0, 5).map((m, i) => (
+                    <Chip key={i} kind="muted" mono>{m.name} · {(m.similarity * 100).toFixed(0)}%</Chip>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {row.flag && (
               <div style={{ marginTop: 4 }}>

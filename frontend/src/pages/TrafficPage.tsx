@@ -326,6 +326,25 @@ function RequestDrawer({ req, open, onClose, onOpenIncident }: { req: TrafficRow
                   <Chip kind="err" mono>{req.threat.detector}</Chip>
                   <Chip kind="muted" mono>confidence {(req.threat.confidence * 100).toFixed(0)}%</Chip>
                 </div>
+                {req.classificationReason && req.classificationReason !== req.threat.title && (
+                  <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600 }}>Reason: </span>
+                    <span className="caption">{req.classificationReason}</span>
+                  </div>
+                )}
+                {req.threatKnowledgeMatches && req.threatKnowledgeMatches.length > 0 && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--fg-tertiary)' }}>
+                      MATCHED THREAT KNOWLEDGE
+                    </div>
+                    <div className="row-tight" style={{ flexWrap: "wrap", gap: 6 }}>
+                      {req.threatKnowledgeMatches.slice(0, 5).map((m, i) => (
+                        <Chip key={i} kind="muted" mono>{m.name} · {(m.similarity * 100).toFixed(0)}%</Chip>
+                      ))}
+                    </div>
+                    <div className="caption" style={{ marginTop: 6 }}>See the Threat Knowledge tab for the full list.</div>
+                  </div>
+                )}
               </div>
             ) : req.code >= 400 ? (
               <div className="card" style={{ padding: 14, borderColor: "var(--danger)", background: "var(--danger-bg)" }}>

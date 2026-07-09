@@ -91,6 +91,7 @@ pub(crate) async fn handle_bypass(
             final_decision:        Some("bypassed".to_string()),
             blocked_stage:         None,
             classification_reason: None,
+            threat_knowledge_matches: None,
             t2_flagged:            false,
             t2_confidence:         None,
             t2_reason:             None,
@@ -131,6 +132,7 @@ fn build_forward_args<'a>(
     final_decision: Option<String>,
     blocked_stage: Option<String>,
     classification_reason: Option<&'a str>,
+    threat_knowledge_matches: Option<String>,
     t2_flagged: bool,
     t2_confidence: Option<f32>,
     t2_reason: Option<String>,
@@ -168,6 +170,7 @@ fn build_forward_args<'a>(
         final_decision,
         blocked_stage,
         classification_reason,
+        threat_knowledge_matches,
         t2_flagged,
         t2_confidence,
         t2_reason,
@@ -212,6 +215,14 @@ pub(crate) async fn dispatch_enforcement(
     let classifier_prov_name_ref = classifier_prov_name.as_deref();
     let threat_framework_id_ref = threat_framework_id.as_deref();
     let user_prompt_redacted = ctx.user_prompt.clone();
+    // Semantic-stage threat knowledge matches — carried through to every
+    // outcome (monitor/flag/block/forward), not just hard blocks, so the
+    // traffic log can always show what the semantic layer matched.
+    let threat_knowledge_matches_json = if !scan_summary.semantic_matches.is_empty() {
+        serde_json::to_string(&scan_summary.semantic_matches).ok()
+    } else {
+        None
+    };
 
     match evaluate(scan_summary, app_mode) {
         Some(EnforcementAction::Monitor { detector, confidence, reason, excerpt }) => {
@@ -225,7 +236,7 @@ pub(crate) async fn dispatch_enforcement(
                 Some("monitored".to_string()),
                 threat_framework_id_ref, classifier_prov_id_ref, classifier_prov_name_ref,
                 pipeline_trace_json, Some(scan_summary.final_decision.clone()), scan_summary.blocked_stage.clone(),
-                classification_reason_ref,
+                classification_reason_ref, threat_knowledge_matches_json.clone(),
                 t2_flagged_val, t2_confidence_ref, t2_reason_clone,
                 req_json, None, ctx.raw_forward_body.clone(),
             );
@@ -269,12 +280,6 @@ pub(crate) async fn dispatch_enforcement(
                     ctx.log_writer,
                     ctx.app_id,
                 ).await;
-
-                let threat_knowledge_matches_json = if !scan_summary.semantic_matches.is_empty() {
-                    serde_json::to_string(&scan_summary.semantic_matches).ok()
-                } else {
-                    None
-                };
 
                 ctx.log_writer.log_entry(LogEntry {
                     request_id: ctx.request_id.to_string(),
@@ -327,12 +332,6 @@ pub(crate) async fn dispatch_enforcement(
                 elapsed
             );
 
-            let threat_knowledge_matches_json = if !scan_summary.semantic_matches.is_empty() {
-                serde_json::to_string(&scan_summary.semantic_matches).ok()
-            } else {
-                None
-            };
-
             ctx.log_writer.log_entry(LogEntry {
                 request_id: ctx.request_id.to_string(),
                 app_id: ctx.app_id.to_string(),
@@ -384,7 +383,7 @@ pub(crate) async fn dispatch_enforcement(
                 Some("flagged".to_string()),
                 threat_framework_id_ref, classifier_prov_id_ref, classifier_prov_name_ref,
                 pipeline_trace_json, Some(scan_summary.final_decision.clone()), scan_summary.blocked_stage.clone(),
-                classification_reason_ref,
+                classification_reason_ref, threat_knowledge_matches_json.clone(),
                 t2_flagged_val, t2_confidence_ref, t2_reason_clone,
                 req_json, None, ctx.raw_forward_body.clone(),
             );
@@ -419,6 +418,7 @@ pub(crate) async fn dispatch_enforcement(
                     pipeline_trace: pipeline_trace_json.clone(),
                     final_decision: Some("block".to_string()),
                     classification_reason: classification_reason_ref.map(|s| s.to_string()),
+                    threat_knowledge_matches: threat_knowledge_matches_json.clone(),
                     t2_flagged: t2_flagged_val,
                     t2_confidence: t2_confidence_ref,
                     t2_reason: t2_reason_clone,
@@ -469,7 +469,7 @@ pub(crate) async fn dispatch_enforcement(
                 Some("redacted".to_string()),
                 threat_framework_id_ref, classifier_prov_id_ref, classifier_prov_name_ref,
                 pipeline_trace_json, Some(scan_summary.final_decision.clone()), scan_summary.blocked_stage.clone(),
-                classification_reason_ref,
+                classification_reason_ref, threat_knowledge_matches_json.clone(),
                 t2_flagged_val, t2_confidence_ref, t2_reason_clone,
                 redacted_req, redaction_summary, None,
             );
@@ -482,7 +482,7 @@ pub(crate) async fn dispatch_enforcement(
                 Some("forwarded".to_string()),
                 None, classifier_prov_id_ref, classifier_prov_name_ref,
                 pipeline_trace_json, Some(scan_summary.final_decision.clone()), scan_summary.blocked_stage.clone(),
-                classification_reason_ref,
+                classification_reason_ref, threat_knowledge_matches_json.clone(),
                 t2_flagged_val, t2_confidence_ref, t2_reason_clone,
                 req_json, None, ctx.raw_forward_body.clone(),
             );
@@ -675,7 +675,7 @@ mod tests {
         };
         let args = build_forward_args(
             &ctx, false, None, None, None, None, None, None, None, None,
-            None, None, None, None, false, None, None, serde_json::json!({}),
+            None, None, None, None, None, false, None, None, serde_json::json!({}),
             None, None,
         );
         assert!(std::ptr::eq(args.client, ctx.client));
@@ -716,7 +716,7 @@ mod tests {
             &ctx, true, Some("det-x"), Some(0.95), Some("threat"), Some("excerpt"),
             Some("blocked".to_string()), Some("fw-1"), Some("cl-1"), Some("cl-name"),
             Some(r#"{"a":1}"#.to_string()), Some("block".to_string()),
-            Some("stage1".to_string()), Some("reason"), true, Some(0.8),
+            Some("stage1".to_string()), Some("reason"), None, true, Some(0.8),
             Some("t2-reason".to_string()), serde_json::json!({"msg":"hi"}),
             Some("redacted".to_string()),
             Some((Bytes::from("body"), Some("raw".to_string()))),
@@ -757,7 +757,7 @@ mod tests {
         let ctx = minimal_ctx(&client, &log_writer, &policy_store, &[], &headers);
         let args = build_forward_args(
             &ctx, false, None, None, None, None, None, None, None, None,
-            None, None, None, None, false, None, None, serde_json::json!({}),
+            None, None, None, None, None, false, None, None, serde_json::json!({}),
             None, None,
         );
         assert!(!args.flagged);
@@ -794,7 +794,7 @@ mod tests {
         ctx.is_anthropic = true;
         let args = build_forward_args(
             &ctx, false, None, None, None, None, None, None, None, None,
-            None, None, None, None, false, None, None, serde_json::json!({}),
+            None, None, None, None, None, false, None, None, serde_json::json!({}),
             None, None,
         );
         assert!(args.is_anthropic);
@@ -815,7 +815,7 @@ mod tests {
         ctx.upstream_path_override = Some("/v1/responses");
         let args = build_forward_args(
             &ctx, false, None, None, None, None, None, None, None, None,
-            None, None, None, None, false, None, None, serde_json::json!({}),
+            None, None, None, None, None, false, None, None, serde_json::json!({}),
             None, None,
         );
         assert_eq!(args.path_override, Some("/v1/responses"));
@@ -837,7 +837,7 @@ mod tests {
         ctx.raw_input_payload = Some("raw-input");
         let args = build_forward_args(
             &ctx, false, None, None, None, None, None, None, None, None,
-            None, None, None, None, false, None, None, serde_json::json!({}),
+            None, None, None, None, None, false, None, None, serde_json::json!({}),
             None, None,
         );
         assert_eq!(args.user_agent, Some("curl/8.0"));

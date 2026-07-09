@@ -207,6 +207,7 @@ pub struct ForwardArgs<'a> {
     pub final_decision:        Option<String>,
     pub blocked_stage:         Option<String>,
     pub classification_reason: Option<&'a str>,
+    pub threat_knowledge_matches: Option<String>,
     pub t2_flagged:            bool,
     pub t2_confidence:         Option<f32>,
     pub t2_reason:             Option<String>,

@@ -70,6 +70,7 @@ pub async fn forward_streaming(
         final_decision,
         blocked_stage,
         classification_reason,
+        threat_knowledge_matches,
         t2_flagged,
         t2_confidence,
         t2_reason,
@@ -306,6 +307,7 @@ pub async fn forward_streaming(
                     let final_decision_owned = final_decision.clone();
                     let blocked_stage_owned  = blocked_stage.clone();
                     let classification_reason_owned = classification_reason.map(|s| s.to_string());
+                    let threat_knowledge_matches_owned = threat_knowledge_matches.clone();
                     let detector_owned       = detector.map(|s| s.to_string());
                     let threat_title_owned   = threat_title.map(|s| s.to_string());
                     let excerpt_owned        = excerpt.map(|s| s.to_string());
@@ -492,6 +494,7 @@ pub async fn forward_streaming(
                             final_decision: final_decision_owned,
                             blocked_stage: blocked_stage_owned,
                             classification_reason: classification_reason_owned,
+                            threat_knowledge_matches: threat_knowledge_matches_owned,
                             t2_flagged,
                             t2_confidence,
                             t2_reason: t2_reason_owned,
@@ -587,6 +590,7 @@ pub async fn forward_streaming(
         classifier_provider_id: classifier_id.map(|s| s.to_string()),
         classifier_provider_name: classifier_name.map(|s| s.to_string()),
         classification_reason: classification_reason.map(|s| s.to_string()),
+        threat_knowledge_matches,
         t2_flagged,
         t2_confidence,
         t2_reason: t2_reason.clone(),

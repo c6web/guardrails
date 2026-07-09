@@ -103,6 +103,7 @@ pub async fn handle_upstream_test(
             final_decision: None,
             blocked_stage: None,
             classification_reason: None,
+            threat_knowledge_matches: None,
             t2_flagged: false,
             t2_confidence: None,
             t2_reason: None,
