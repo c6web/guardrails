@@ -44,6 +44,14 @@ export async function deleteAiProvider(id: string): Promise<void> {
   await apiFetch(`/api/ai-providers/${id}`, { method: 'DELETE' })
 }
 
+export async function lookupAiProviderModelsAdhoc(data: { endpoint: string; api_key?: string; vendor: string }): Promise<{ models: { id: string; label?: string }[] }> {
+  const res = await apiFetch<{ data: { models: { id: string; label?: string }[] } }>(
+    '/api/ai-providers/models/lookup',
+    { method: 'POST', body: JSON.stringify(data) },
+  )
+  return res.data
+}
+
 export async function lookupAiProviderModels(id: string): Promise<{ models: { id: string; label?: string }[] }> {
   const res = await apiFetch<{ data: { models: { id: string; label?: string }[] } }>(
     `/api/ai-providers/${id}/models/lookup`,

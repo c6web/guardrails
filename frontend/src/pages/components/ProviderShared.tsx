@@ -3,8 +3,8 @@ import { Chip, KV, FORM_INPUT_STYLE, Drawer, FormModal } from '../../components/
 export { Toast } from '../../components/ui'
 import { X, Settings, Network, Play, Check, AlertTri } from '../../components/ui/Icons'
 import { apiFetch } from '../../api/client'
-import { lookupAiProviderModels } from '../../api/aiProviders'
-import { lookupEmbeddingProviderModels } from '../../api/embeddingProviders'
+import { lookupAiProviderModels, lookupAiProviderModelsAdhoc } from '../../api/aiProviders'
+import { lookupEmbeddingProviderModels, lookupEmbeddingProviderModelsAdhoc } from '../../api/embeddingProviders'
 import modelsOpenRouter           from '../../data/recommended-models-openrouter.json'
 import modelsOpenAI               from '../../data/recommended-models-openai.json'
 import modelsAnthropic            from '../../data/recommended-models-anthropic.json'
@@ -167,7 +167,10 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
     if (isEmbedding && initialProvider?.model) return initialProvider.model
     return null
   })
-  const [lookupResults, setLookupResults] = React.useState<{ id: string; label?: string }[]>([])
+  const [lookupResults, setLookupResults] = React.useState<{ id: string; label?: string }[]>(() => {
+    if (isEmbedding && initialProvider?.model) return [{ id: initialProvider.model }]
+    return []
+  })
   const [lookupNote, setLookupNote] = React.useState<string | null>(null)
 
   // Sync form.model from allowed-models default
@@ -178,16 +181,38 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
     }
   }, [allowedModels])
 
+  // Ensure selectedModel is always present in lookupResults
+  React.useEffect(() => {
+    if (!isEmbedding || !selectedModel) return
+    setLookupResults(prev => {
+      if (prev.some(m => m.id === selectedModel)) return prev
+      return [{ id: selectedModel }, ...prev]
+    })
+  }, [selectedModel])
+
   async function handleLookupModels() {
-    if (!form.id) return
+    if (!form.endpoint) { setModelsError('Endpoint is required'); return }
+    if (!form.vendor) { setModelsError('Vendor is required'); return }
+    setModelsError(null)
     setLookupRunning(true)
     try {
       if (isEmbedding) {
-        const result = await lookupEmbeddingProviderModels(form.id)
-        setLookupResults(result.models)
+        const result = form.id
+          ? await lookupEmbeddingProviderModels(form.id)
+          : await lookupEmbeddingProviderModelsAdhoc({ endpoint: form.endpoint, api_key: form.api_key || undefined, vendor: form.vendor })
+        setLookupResults(prev => {
+          const existing = new Set(result.models.map(m => m.id))
+          const merged = [...result.models]
+          for (const p of prev) {
+            if (!existing.has(p.id)) merged.push(p)
+          }
+          return merged
+        })
         setLookupNote(result.note ?? null)
       } else {
-        const result = await lookupAiProviderModels(form.id)
+        const result = form.id
+          ? await lookupAiProviderModels(form.id)
+          : await lookupAiProviderModelsAdhoc({ endpoint: form.endpoint, api_key: form.api_key || undefined, vendor: form.vendor })
         setAllowedModels(prev => {
           const existing = new Map(prev.map(a => [a.id, a]))
           const merged: AllowedModelEntry[] = prev.map(a => ({ ...a }))
@@ -201,6 +226,8 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
       }
     } catch (err) {
       console.error('[model-lookup]', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setModelsError(msg)
     } finally {
       setLookupRunning(false)
     }
@@ -362,7 +389,7 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
       <Field label={`Default model${config.requiredFields.includes('model') ? ' *' : ''}`} hint={config.requiredFields.includes('model') ? 'Required' : 'Optional — use the provider\'s default if left blank'} error={modelsError ?? undefined}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <button type="button" className="btn btn-ghost btn-sm"
-            disabled={!form.id || lookupRunning}
+            disabled={!form.endpoint || !form.vendor || lookupRunning}
             onClick={handleLookupModels}>
             {lookupRunning
               ? <><svg style={{ animation: 'spin 1s linear infinite' }} width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg> Looking up…</>
@@ -374,8 +401,8 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
               Browse recommended models
             </button>
           )}
-          {!form.id && (
-            <span style={{ fontSize: 11, color: 'var(--fg-tertiary)' }}>Save provider first to look up models</span>
+          {(!form.endpoint || !form.vendor) && (
+            <span style={{ fontSize: 11, color: 'var(--fg-tertiary)' }}>Enter vendor and endpoint first</span>
           )}
         </div>
 

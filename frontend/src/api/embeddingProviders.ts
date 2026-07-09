@@ -82,6 +82,14 @@ export interface EmbeddingProviderConfig {
   backup2: EmbeddingProvider | null
 }
 
+export async function lookupEmbeddingProviderModelsAdhoc(data: { endpoint: string; api_key?: string; vendor: string }): Promise<{ models: ModelEntry[]; note?: string }> {
+  const res = await apiFetch<{ data: { models: ModelEntry[]; note?: string } }>(
+    '/api/embedding-providers/models/lookup',
+    { method: 'POST', body: JSON.stringify(data) },
+  )
+  return res.data
+}
+
 export async function lookupEmbeddingProviderModels(id: string): Promise<{ models: ModelEntry[]; note?: string }> {
   const res = await apiFetch<{ data: { models: ModelEntry[]; note?: string } }>(
     `/api/embedding-providers/${id}/models/lookup`

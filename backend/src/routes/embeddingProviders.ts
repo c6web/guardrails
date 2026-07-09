@@ -249,6 +249,31 @@ router.post('/:id/test', requireAuth, async (req: Request, res: Response): Promi
   }
 })
 
+// POST /api/embedding-providers/models/lookup — ad-hoc model lookup (no provider ID needed, for creation flow)
+router.post('/models/lookup', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isAdmin(req)) { res.status(403).json({ error: 'Admin access required' }); return }
+
+    const { endpoint, api_key, vendor } = req.body as { endpoint?: string; api_key?: string; vendor?: string }
+    if (!endpoint) { res.status(400).json({ error: 'endpoint is required' }); return }
+    if (!vendor) { res.status(400).json({ error: 'vendor is required' }); return }
+
+    try {
+      await validateEndpoint(endpoint)
+    } catch (e: unknown) {
+      res.status(502).json({ error: 'Failed to connect to provider endpoint' })
+      return
+    }
+
+    const models = await fetchModels({ endpoint, apiKey: api_key, vendor }, 30000)
+    res.json({ data: { models, note: 'Embedding model list is not filtered by capability — select the best fit for your use case.' } })
+  } catch (err: unknown) {
+    const msg = (err as Error).message ?? 'Unknown error'
+    console.error(`[models/lookup/ad-hoc]: ${msg}`)
+    res.status(502).json({ error: 'Failed to fetch models from provider' })
+  }
+})
+
 // GET /api/embedding-providers/:id/models/lookup — admin only; fetch model list from upstream
 router.get('/:id/models/lookup', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {

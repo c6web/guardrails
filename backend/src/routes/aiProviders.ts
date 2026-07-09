@@ -217,6 +217,29 @@ function createRouter(logStore: ILogStore): Router {
     }
   })
 
+  // POST /api/ai-providers/models/lookup — admin only; ad-hoc model lookup (no provider ID needed, for creation flow)
+  router.post('/models/lookup', requireRole('admin'), async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { endpoint, api_key, vendor } = req.body as { endpoint?: string; api_key?: string; vendor?: string }
+      if (!endpoint) { res.status(400).json({ error: 'endpoint is required' }); return }
+      if (!vendor) { res.status(400).json({ error: 'vendor is required' }); return }
+
+      try {
+        await validateEndpoint(endpoint)
+      } catch (e: unknown) {
+        res.status(502).json({ error: 'Failed to connect to provider endpoint' })
+        return
+      }
+
+      const models = await fetchModels({ endpoint, apiKey: api_key, vendor }, 30000)
+      res.json({ data: { models } })
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? 'Unknown error'
+      console.error(`[models/lookup/ad-hoc]: ${msg}`)
+      res.status(502).json({ error: 'Failed to fetch models from provider' })
+    }
+  })
+
   // GET /api/ai-providers/:id/models/lookup — admin only; fetch model list from upstream
   router.get('/:id/models/lookup', requireRole('admin'), async (req: Request, res: Response): Promise<void> => {
     try {
