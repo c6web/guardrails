@@ -1,5 +1,10 @@
 import { apiFetch } from './client'
 
+export interface ModelEntry {
+  id: string
+  label?: string
+}
+
 export interface EmbeddingProvider {
   id: string
   name: string
@@ -75,6 +80,30 @@ export interface EmbeddingProviderConfig {
   backup1: EmbeddingProvider | null
   backup2_id: string | null
   backup2: EmbeddingProvider | null
+}
+
+export async function lookupEmbeddingProviderModels(id: string): Promise<{ models: ModelEntry[]; note?: string }> {
+  const res = await apiFetch<{ data: { models: ModelEntry[]; note?: string } }>(
+    `/api/embedding-providers/${id}/models/lookup`
+  )
+  return res.data
+}
+
+export interface DimensionImpact {
+  in_chain: boolean
+  active_dimension?: number | null
+  new_dimension?: number
+  at_risk_count: number
+}
+
+export async function getEmbeddingDimensionImpact(
+  id: string,
+  dimensions: number
+): Promise<DimensionImpact> {
+  const res = await apiFetch<{ data: DimensionImpact }>(
+    `/api/embedding-providers/${id}/dimension-impact?dimensions=${dimensions}`
+  )
+  return res.data
 }
 
 export async function getEmbeddingProviderConfig(): Promise<EmbeddingProviderConfig> {

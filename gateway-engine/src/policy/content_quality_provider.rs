@@ -102,6 +102,7 @@ pub(super) async fn load_content_quality_provider(store: &DetectorStore, pool: &
                     row.vendor,
                     row.max_output_token,
                     row.max_input_token,
+                    vec![],
                 );
                 tracing::info!("[content_quality_provider] judge LLM: {} @ {}", p.name, p.endpoint);
                 *store.content_quality_judge_provider.write().unwrap_or_else(|e| e.into_inner()) = Some(p);

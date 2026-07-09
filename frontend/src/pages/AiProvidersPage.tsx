@@ -1,7 +1,7 @@
 import React from 'react'
 import { Plus, Pencil, Trash2, Play, Network, Activity } from '../components/ui/Icons'
 import { Chip, DataTable, type ColumnDef } from '../components/ui'
-import { getAiProviders, getAiProvider, createAiProvider, updateAiProvider, deleteAiProvider, type AiProvider } from '../api/aiProviders'
+import { getAiProviders, getAiProvider, createAiProvider, updateAiProvider, deleteAiProvider, setAiProviderAllowedModels, type AiProvider } from '../api/aiProviders'
 import { getProviders } from '../api/providers'
 import { getClassifierConfig, type ClassifierConfig } from '../api/classifiers'
 import { PageHeader, Breadcrumbs, StatCard, StatRow, EmptyState, ErrorState, LoadingState } from '../components/ui'
@@ -122,7 +122,7 @@ const AiProvidersPage: React.FC<AiProvidersPageProps> = () => {
   const healthyCount = providers.filter(p => p.status === 'healthy').length
 
   async function handleCreate(data: ProviderFormData) {
-    await createAiProvider({
+    const created = await createAiProvider({
       id: data.id, name: data.name, vendor: data.vendor, endpoint: data.endpoint,
       api_key: data.api_key || undefined, notes: data.notes || undefined,
       model: data.model || undefined, max_output_token: data.max_output_token ?? undefined, max_input_token: data.max_input_token ?? undefined,
@@ -131,6 +131,9 @@ const AiProvidersPage: React.FC<AiProvidersPageProps> = () => {
       allow_fallbacks: data.allow_fallbacks ?? null,
       data_collection: data.data_collection ?? null,
     })
+    if (data.allowed_models?.length && data.default_model) {
+      await setAiProviderAllowedModels(created.id, data.allowed_models, data.default_model)
+    }
     setShowCreate(false)
     await load()
     setToast({ msg: `${data.name} registered`, kind: 'ok' })
@@ -147,6 +150,9 @@ const AiProvidersPage: React.FC<AiProvidersPageProps> = () => {
       allow_fallbacks: data.allow_fallbacks ?? null,
       data_collection: data.data_collection ?? null,
     })
+    if (data.allowed_models?.length && data.default_model) {
+      await setAiProviderAllowedModels(data.id, data.allowed_models, data.default_model)
+    }
     await load()
     setToast({ msg: `${data.name} updated`, kind: 'ok' })
   }

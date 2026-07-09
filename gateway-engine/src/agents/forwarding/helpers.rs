@@ -81,12 +81,16 @@ pub async fn prepare_provider_attempt(
         }
     }
 
-    // F-7: model override + max_tokens clamping with MutationLedger tracking.
+    // F-7: model override (with allow-list enforcement) + max_tokens clamping with
+    // MutationLedger tracking. When `allowed_models` is non-empty, only models in the
+    // list are accepted; pre-migration providers with an empty list fall back to the
+    // original unconditional model override.
     let is_responses_api = path_override == Some(crate::constants::RESPONSES_PATH);
     let (upstream_body, mutations_json) = apply_body_mutations(
         upstream_body,
         provider.max_output_token,
         provider.model.as_deref(),
+        &provider.allowed_models,
         adapter.as_ref(),
         is_streaming,
         is_responses_api,

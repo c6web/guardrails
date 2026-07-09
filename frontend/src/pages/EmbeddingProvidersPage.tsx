@@ -9,8 +9,10 @@ import {
   deleteEmbeddingProvider,
   getEmbeddingProviderConfig,
   updateEmbeddingProviderConfig,
+  getEmbeddingDimensionImpact,
   type EmbeddingProvider,
   type EmbeddingProviderConfig,
+  type DimensionImpact,
 } from '../api/embeddingProviders'
 import ActionCell from '../components/ui/ActionCell'
 import { Toast, ConfirmModal, ProviderFormModal, ProviderDetailDrawer, EmbeddingTestModal, type ProviderFormData } from './components/ProviderShared'
@@ -165,6 +167,7 @@ const EmbeddingProvidersPage: React.FC<{}> = () => {
   const [toast, setToast] = React.useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
   const [config, setConfig] = React.useState<EmbeddingProviderConfig | null>(null)
   const [chainBusy, setChainBusy] = React.useState(false)
+  const [dimConfirm, setDimConfirm] = React.useState<{ impact: DimensionImpact; payload: ProviderFormData } | null>(null)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -233,6 +236,22 @@ const EmbeddingProvidersPage: React.FC<{}> = () => {
   }
 
   const handleUpdate = async (data: ProviderFormData) => {
+    const modelChanged = data.model !== (editTarget?.model ?? null)
+    const dimsChanged = parseInt(data.dimensions as string, 10) !== (editTarget?.dimensions ?? null)
+    if (modelChanged || dimsChanged) {
+      const newDims = parseInt(data.dimensions as string, 10)
+      if (!isNaN(newDims)) {
+        try {
+          const impact = await getEmbeddingDimensionImpact(data.id, newDims)
+          if (impact.at_risk_count > 0) {
+            setDimConfirm({ impact, payload: data })
+            return
+          }
+        } catch {
+          // If the endpoint doesn't exist or errors, proceed normally
+        }
+      }
+    }
     setEditTarget(null)
     setDetailProv(null)
     await updateEmbeddingProvider(data.id, {
@@ -468,6 +487,37 @@ const EmbeddingProvidersPage: React.FC<{}> = () => {
       )}
       {editTarget && (
         <ProviderFormModal labels={FORM_LABELS} extraFields={[{ name: 'dimensions', label: 'Embedding dimensions', type: 'number', placeholder: 'e.g. 1536' }]} config={{ requiredFields: ['model'] }} initialProvider={editTarget as any} onClose={() => setEditTarget(null)} onSave={handleUpdate} asDrawer isEmbedding />
+      )}
+      {dimConfirm && (
+        <ConfirmModal
+          title="Change embedding dimension"
+          message={
+            <>
+              Changing dimensions from <strong>{dimConfirm.impact.active_dimension}</strong> to{' '}
+              <strong>{dimConfirm.impact.new_dimension}</strong> will affect{' '}
+              <strong>{dimConfirm.impact.at_risk_count}</strong> threat_knowledge record(s).
+              Existing embeddings may break if they use the current dimension.
+              <br /><br />
+              Proceed with the change?
+            </>
+          }
+          confirmLabel="Change dimension anyway"
+          danger
+          onClose={() => setDimConfirm(null)}
+          onConfirm={async () => {
+            const { payload } = dimConfirm
+            setDimConfirm(null)
+            setEditTarget(null)
+            setDetailProv(null)
+            await updateEmbeddingProvider(payload.id, {
+              ...payload,
+              dimensions: parseInt(payload.dimensions as string, 10) || null,
+              dimension_change_ack: true,
+            } as any)
+            await load()
+            setToast({ msg: `${payload.name} updated`, kind: 'ok' })
+          }}
+        />
       )}
       {deleteTarget && (
         <ConfirmModal

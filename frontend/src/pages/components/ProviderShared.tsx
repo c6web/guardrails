@@ -1,8 +1,10 @@
 import React from 'react'
 import { Chip, KV, FORM_INPUT_STYLE, Drawer, FormModal } from '../../components/ui'
 export { Toast } from '../../components/ui'
-import { X, Settings, Network, Play, Check, AlertTri, Info } from '../../components/ui/Icons'
+import { X, Settings, Network, Play, Check, AlertTri } from '../../components/ui/Icons'
 import { apiFetch } from '../../api/client'
+import { lookupAiProviderModels } from '../../api/aiProviders'
+import { lookupEmbeddingProviderModels } from '../../api/embeddingProviders'
 import modelsOpenRouter           from '../../data/recommended-models-openrouter.json'
 import modelsOpenAI               from '../../data/recommended-models-openai.json'
 import modelsAnthropic            from '../../data/recommended-models-anthropic.json'
@@ -11,6 +13,7 @@ import modelsOllama               from '../../data/recommended-models-ollama.jso
 import modelsEmbeddingOpenRouter  from '../../data/recommended-models-embedding-openrouter.json'
 import modelsEmbeddingOllama      from '../../data/recommended-models-embedding-ollama.json'
 import modelsEmbeddingGoogle      from '../../data/recommended-models-embedding-google.json'
+import { AllowedModelsPicker, SingleModelPicker, type AllowedModelEntry } from './ModelPickers'
 
 interface RecommendedModel {
   id: string; name: string; provider: string
@@ -46,6 +49,8 @@ export interface ProviderFormData {
   provider?: string | null
   allow_fallbacks?: boolean | null
   data_collection?: string | null
+  allowed_models?: string[]
+  default_model?: string | null
 }
 
 export interface ProviderFormLabels {
@@ -142,6 +147,103 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
   const modelCatalog = isEmbedding ? EMBEDDING_RECOMMENDED_MODELS : RECOMMENDED_MODELS
   const hasModelSuggestions = (modelCatalog[form.vendor]?.length ?? 0) > 0
 
+  const [allowedModels, setAllowedModels] = React.useState<AllowedModelEntry[]>(() => {
+    if (!initialProvider) return []
+    const prov = initialProvider as any
+    if (prov.allowed_models?.length) {
+      const defaultModel = prov.model || prov.allowed_models[0]
+      return prov.allowed_models.map((m: string) => ({
+        id: m, checked: true, isDefault: m === defaultModel,
+      }))
+    }
+    if (prov.model) {
+      return [{ id: prov.model, checked: true, isDefault: true }]
+    }
+    return []
+  })
+  const [lookupRunning, setLookupRunning] = React.useState(false)
+  const [modelsError, setModelsError] = React.useState<string | null>(null)
+  const [selectedModel, setSelectedModel] = React.useState<string | null>(() => {
+    if (isEmbedding && initialProvider?.model) return initialProvider.model
+    return null
+  })
+  const [lookupResults, setLookupResults] = React.useState<{ id: string; label?: string }[]>([])
+  const [lookupNote, setLookupNote] = React.useState<string | null>(null)
+
+  // Sync form.model from allowed-models default
+  React.useEffect(() => {
+    const def = allowedModels.find(a => a.checked && a.isDefault)
+    if (def) {
+      setForm(f => ({ ...f, model: def.id }))
+    }
+  }, [allowedModels])
+
+  async function handleLookupModels() {
+    if (!form.id) return
+    setLookupRunning(true)
+    try {
+      if (isEmbedding) {
+        const result = await lookupEmbeddingProviderModels(form.id)
+        setLookupResults(result.models)
+        setLookupNote(result.note ?? null)
+      } else {
+        const result = await lookupAiProviderModels(form.id)
+        setAllowedModels(prev => {
+          const existing = new Map(prev.map(a => [a.id, a]))
+          const merged: AllowedModelEntry[] = prev.map(a => ({ ...a }))
+          for (const m of result.models) {
+            if (!existing.has(m.id)) {
+              merged.push({ id: m.id, label: m.label, checked: false, isDefault: false })
+            }
+          }
+          return merged
+        })
+      }
+    } catch (err) {
+      console.error('[model-lookup]', err)
+    } finally {
+      setLookupRunning(false)
+    }
+  }
+
+  function handleToggleModel(id: string) {
+    setModelsError(null)
+    setAllowedModels(prev => {
+      const target = prev.find(a => a.id === id)
+      if (!target) return prev
+      if (target.isDefault && target.checked) {
+        return prev
+      }
+      return prev.map(a => ({
+        ...a, checked: a.id === id ? !a.checked : a.checked,
+      }))
+    })
+  }
+
+  function handleSelectAll() {
+    setModelsError(null)
+    setAllowedModels(prev => {
+      const allChecked = prev.every(a => a.checked)
+      if (allChecked) {
+        return prev.map(a => ({
+          ...a, checked: false, isDefault: false,
+        }))
+      }
+      const firstUnchecked = prev.find(a => !a.checked)
+      return prev.map(a => ({
+        ...a, checked: true,
+        isDefault: a.isDefault || (firstUnchecked && firstUnchecked.id === a.id ? prev.every(p => p.checked) : false),
+      }))
+    })
+  }
+
+  function handleSetDefault(id: string) {
+    setModelsError(null)
+    setAllowedModels(prev => prev.map(a => ({
+      ...a, isDefault: a.id === id,
+    })))
+  }
+
   function setField(k: string, v: string | number) {
     setForm(f => ({ ...f, [k]: v }))
   }
@@ -165,6 +267,24 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
     for (const field of config.requiredFields) {
       if (!((form as any)[field] && (form as any)[field].toString().trim())) return
     }
+    if (isEmbedding) {
+      if (!selectedModel && config.requiredFields.includes('model')) {
+        setModelsError('Select a model before saving.')
+        return
+      }
+    } else {
+      const checkedModels = allowedModels.filter(a => a.checked).map(a => a.id)
+      const defaultModel = allowedModels.find(a => a.checked && a.isDefault)
+      if (allowedModels.length > 0 && checkedModels.length === 0) {
+        setModelsError('Select at least one allowed model before saving.')
+        return
+      }
+      if (checkedModels.length > 0 && !defaultModel) {
+        setModelsError('Choose a default model (click the star) among the selected models.')
+        return
+      }
+    }
+    setModelsError(null)
     setBusy(true)
     try {
       const payload: ProviderFormData = {
@@ -172,13 +292,22 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
         name: form.name.trim(), vendor: form.vendor.trim(),
         endpoint: form.endpoint.trim(),
         api_key: form.api_key || null, notes: form.notes || null,
-        model: (form.model as string).trim() || null,
+        model: isEmbedding ? selectedModel : ((form.model as string).trim() || null),
         max_output_token: form.max_output_token !== '' ? Number(form.max_output_token) : null,
         max_input_token: form.max_input_token !== '' ? Number(form.max_input_token) : null,
         timeout_ms: form.timeout_ms,
         provider: ((form as any)['provider'] as string)?.trim() || null,
         allow_fallbacks: (form as any)['allow_fallbacks'] ?? null,
         data_collection: (form as any)['data_collection'] ?? null,
+      }
+      if (!isEmbedding) {
+        const checkedModels = allowedModels.filter(a => a.checked).map(a => a.id)
+        const defaultModel = allowedModels.find(a => a.checked && a.isDefault)
+        if (checkedModels.length > 0 && defaultModel) {
+          payload.allowed_models = checkedModels
+          payload.default_model = defaultModel.id
+          payload.model = defaultModel.id
+        }
       }
       if (extraFields?.length) {
         for (const f of extraFields) {
@@ -230,27 +359,46 @@ export function ProviderFormModal({ initialProvider, onClose, onSave, labels: la
           )}
         </div>
       </Field>
-      <Field label={`Model${config.requiredFields.includes('model') ? ' *' : ''}`} hint={config.requiredFields.includes('model') ? 'Required' : 'Optional — use the provider\'s default if left blank'}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input className="input" style={{ ...FORM_INPUT_STYLE, flex: 1 }} value={form.model as string}
-            onChange={e => setField('model', e.target.value)} placeholder="e.g. gpt-4o-mini" />
+      <Field label={`Default model${config.requiredFields.includes('model') ? ' *' : ''}`} hint={config.requiredFields.includes('model') ? 'Required' : 'Optional — use the provider\'s default if left blank'} error={modelsError ?? undefined}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <button type="button" className="btn btn-ghost btn-sm"
+            disabled={!form.id || lookupRunning}
+            onClick={handleLookupModels}>
+            {lookupRunning
+              ? <><svg style={{ animation: 'spin 1s linear infinite' }} width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg> Looking up…</>
+              : 'Look up models'}
+          </button>
           {hasModelSuggestions && (
-            <button type="button" className="icon-btn" style={{ padding: 6, color: 'var(--accent)' }}
-              title="Browse recommended models" onClick={() => setShowModelPicker(true)}>
-              <Info w={15} />
+            <button type="button" className="btn btn-ghost btn-sm"
+              onClick={() => setShowModelPicker(true)}>
+              Browse recommended models
             </button>
           )}
+          {!form.id && (
+            <span style={{ fontSize: 11, color: 'var(--fg-tertiary)' }}>Save provider first to look up models</span>
+          )}
         </div>
+
+        {isEmbedding
+          ? <SingleModelPicker selected={selectedModel} options={lookupResults} onSelect={setSelectedModel} note={lookupNote} />
+          : <AllowedModelsPicker entries={allowedModels} onToggle={handleToggleModel} onSelectAll={handleSelectAll} onSetDefault={handleSetDefault} />}
       </Field>
       {showModelPicker && (
         <RecommendedModelsModal
           vendor={form.vendor}
           catalog={modelCatalog}
           onSelect={m => {
-             setField('model', m.id)
-             if (m.dimensions != null) setField('dimensions', String(m.dimensions))
-             if (m.max_output_token != null) setField('max_output_token', m.max_output_token)
-             if (m.max_input_token != null) setField('max_input_token', m.max_input_token)
+            if (isEmbedding) {
+              setSelectedModel(m.id)
+            } else {
+              setAllowedModels(prev => {
+                if (prev.some(a => a.id === m.id)) return prev
+                return [...prev, { id: m.id, checked: true, isDefault: prev.length === 0 }]
+              })
+            }
+            if (m.dimensions != null) setField('dimensions', String(m.dimensions))
+            if (m.max_output_token != null) setField('max_output_token', m.max_output_token)
+            if (m.max_input_token != null) setField('max_input_token', m.max_input_token)
           }}
           onClose={() => setShowModelPicker(false)}
         />
@@ -450,6 +598,7 @@ export function ClassifierDetailDrawer({ provider, open, onClose }: {
     id: string; name: string; vendor: string; endpoint: string
     api_key?: string; notes?: string; model?: string; max_output_token?: number; max_input_token?: number; status: string
     timeout_ms: number; requests_24h: number; errors_24h: number; avg_latency_ms: number
+    allowed_models?: string[]
   }
   open?: boolean
   onClose: () => void
@@ -487,7 +636,23 @@ export function ClassifierDetailDrawer({ provider, open, onClose }: {
               </button>
             </div>
           ) : <span style={{ color: 'var(--fg-tertiary)', fontSize: 12 }}>Not set</span> },
-          { label: 'Model', value: <span style={{ fontSize: 12 }}>{provider.model || <span style={{ color: 'var(--fg-tertiary)' }}>Default</span>}</span>, mono: true },
+          { label: 'Model', value: provider.allowed_models?.length
+            ? <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {provider.allowed_models.map(m => (
+                  <span key={m} style={{
+                    fontSize: 11, fontFamily: 'var(--font-mono)',
+                    padding: '2px 6px', borderRadius: 4,
+                    background: m === provider.model ? 'var(--accent-subtle, #e8f0fe)' : 'var(--bg-sunken)',
+                    color: m === provider.model ? 'var(--accent)' : 'var(--fg-secondary)',
+                    border: m === provider.model ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
+                    fontWeight: m === provider.model ? 700 : 400,
+                  }}>
+                    {m}
+                    {m === provider.model && ' ★'}
+                  </span>
+                ))}
+              </div>
+            : <span style={{ fontSize: 12 }}>{provider.model || <span style={{ color: 'var(--fg-tertiary)' }}>Default</span>}</span> },
           { label: 'Max Input Tokens', value: <span style={{ fontSize: 12 }}>{provider.max_input_token != null ? formatTokenCount(provider.max_input_token) : <span style={{ color: 'var(--fg-tertiary)' }}>Unlimited</span>}</span>, mono: true },
           { label: 'Max Output Tokens', value: <span style={{ fontSize: 12 }}>{provider.max_output_token != null ? formatTokenCount(provider.max_output_token) : <span style={{ color: 'var(--fg-tertiary)' }}>Unlimited</span>}</span>, mono: true },
           { label: 'Notes', value: <span style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{provider.notes || <span style={{ color: 'var(--fg-tertiary)' }}>None</span>}</span>, mono: true },
@@ -509,6 +674,7 @@ export function ProviderDetailDrawer({ provider, open, onClose, onEdit, onDelete
     api_key?: string; notes?: string; model?: string; max_output_token?: number; max_input_token?: number; status: string
     timeout_ms: number; requests_24h: number; errors_24h: number; avg_latency_ms: number
     is_default?: boolean
+    allowed_models?: string[]
   }
   open?: boolean
   onClose: () => void; onEdit: () => void; onDelete: () => void
@@ -577,7 +743,23 @@ export function ProviderDetailDrawer({ provider, open, onClose, onEdit, onDelete
               </button>
             </div>
           ) : <span style={{ color: 'var(--fg-tertiary)', fontSize: 12 }}>Not set</span> },
-          { label: 'Model', value: <span style={{ fontSize: 12 }}>{provider.model || <span style={{ color: 'var(--fg-tertiary)' }}>Default</span>}</span>, mono: true },
+          { label: 'Model', value: provider.allowed_models?.length
+            ? <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {provider.allowed_models.map(m => (
+                  <span key={m} style={{
+                    fontSize: 11, fontFamily: 'var(--font-mono)',
+                    padding: '2px 6px', borderRadius: 4,
+                    background: m === provider.model ? 'var(--accent-subtle, #e8f0fe)' : 'var(--bg-sunken)',
+                    color: m === provider.model ? 'var(--accent)' : 'var(--fg-secondary)',
+                    border: m === provider.model ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
+                    fontWeight: m === provider.model ? 700 : 400,
+                  }}>
+                    {m}
+                    {m === provider.model && ' ★'}
+                  </span>
+                ))}
+              </div>
+            : <span style={{ fontSize: 12 }}>{provider.model || <span style={{ color: 'var(--fg-tertiary)' }}>Default</span>}</span> },
           { label: 'Max Input Tokens', value: <span style={{ fontSize: 12 }}>{provider.max_input_token != null ? formatTokenCount(provider.max_input_token) : <span style={{ color: 'var(--fg-tertiary)' }}>Unlimited</span>}</span>, mono: true },
           { label: 'Max Output Tokens', value: <span style={{ fontSize: 12 }}>{provider.max_output_token != null ? formatTokenCount(provider.max_output_token) : <span style={{ color: 'var(--fg-tertiary)' }}>Unlimited</span>}</span>, mono: true },
           { label: 'Notes', value: <span style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{provider.notes || <span style={{ color: 'var(--fg-tertiary)' }}>None</span>}</span>, mono: true },

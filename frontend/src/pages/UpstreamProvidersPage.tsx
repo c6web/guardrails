@@ -1,7 +1,7 @@
 import React from 'react'
 import { Plus, Network, Trash2, Play } from '../components/ui/Icons'
 import { Chip, DataTable, type ColumnDef } from '../components/ui'
-import { getProviders, assignProvider, unassignProvider, setProviderDefault, updateProvider, type AiProvider } from '../api/providers'
+import { getProviders, assignProvider, unassignProvider, setProviderDefault, updateProvider, setAiProviderAllowedModels, type AiProvider } from '../api/providers'
 import { getAiProviders } from '../api/aiProviders'
 
 import { PageHeader, Breadcrumbs, StatCard, StatRow, EmptyState, ErrorState, LoadingState, Drawer } from '../components/ui'
@@ -57,6 +57,11 @@ function UpstreamPickerModal({ assignedIds, onAssign, onClose }: {
       key: 'vendor',
       label: 'Vendor',
       render: (p) => <Chip kind="ok" mono>{p.vendor}</Chip>,
+    },
+    {
+      key: 'model',
+      label: 'Model',
+      render: (p) => <Chip kind={p.model ? 'ok' : 'muted'} mono>{p.model || 'Default'}</Chip>,
     },
     {
       key: 'endpoint',
@@ -231,6 +236,9 @@ const UpstreamProvidersPage: React.FC<{}> = () => {
   async function handleEditSave(provider: AiProvider, data: ProviderFormData) {
     try {
       await updateProvider(provider.id, { name: data.name, vendor: data.vendor, endpoint: data.endpoint, api_key: data.api_key || undefined, notes: data.notes || undefined, model: (data.model as string).trim() || undefined, max_output_token: data.max_output_token !== null && data.max_output_token !== 0 ? Number(data.max_output_token) : undefined, max_input_token: data.max_input_token !== null && data.max_input_token !== 0 ? Number(data.max_input_token) : undefined, timeout_ms: data.timeout_ms })
+      if (data.allowed_models?.length && data.default_model) {
+        await setAiProviderAllowedModels(provider.id, data.allowed_models, data.default_model)
+      }
       await load()
       setToast({ msg: `${data.name} updated`, kind: 'ok' })
     } catch (err) {
@@ -262,6 +270,21 @@ const UpstreamProvidersPage: React.FC<{}> = () => {
       key: 'vendor',
       label: 'Vendor',
       render: (p) => <Chip kind="ok" mono>{p.vendor}</Chip>,
+    },
+    {
+      key: 'model',
+      label: 'Model',
+      render: (p) => {
+        const extras = p.allowed_models?.length ? p.allowed_models.length - 1 : 0
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Chip kind={p.model ? 'ok' : 'muted'} mono>{p.model || 'Default'}</Chip>
+            {extras > 0 && (
+              <span style={{ fontSize: 10, color: 'var(--fg-tertiary)', whiteSpace: 'nowrap' }}>+{extras} more</span>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'endpoint',

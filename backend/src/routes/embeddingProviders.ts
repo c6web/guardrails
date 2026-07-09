@@ -8,6 +8,9 @@ import { providerKeyEncryptOnce, providerKeyDecrypt } from '../utils/gatewayKeyC
 import { v4 as uuidv4 } from 'uuid'
 import type { ILogStore } from '../logs/ILogStore'
 import { triggerGatewayReload } from '../utils/gatewayReload'
+import { fetchModels } from '../utils/modelLookup'
+import { validateEndpoint } from '../utils/validateEndpoint'
+import { getActiveEmbeddingDimension } from '../utils/embedding/activeDimension'
 
 function maskKey(key: string): string {
   if (!key || key.length <= 8) return '••••••••'
@@ -122,7 +125,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response): Promise<v
     const provider = await EmbeddingProvider.findByPk(req.params['id'])
     if (!provider) { res.status(404).json({ error: 'Not found' }); return }
 
-    const ALLOWED_FIELDS = ['name', 'vendor', 'api_key', 'endpoint', 'model', 'dimensions', 'config'] as const
+    const ALLOWED_FIELDS = ['name', 'vendor', 'api_key', 'endpoint', 'model', 'dimensions', 'timeout_ms', 'notes', 'provider', 'allow_fallbacks', 'data_collection'] as const
     const body: Record<string, unknown> = {}
     for (const key of ALLOWED_FIELDS) {
       if ((req.body as Record<string, unknown>)[key] !== undefined) {
@@ -147,6 +150,41 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response): Promise<v
     } else {
       delete body['api_key']
     }
+
+    // Dimension-safety guard: detect breaking dimension changes for chain providers
+    const modelChanging = body.model !== undefined && body.model !== provider.model
+    const dimsChanging = body.dimensions !== undefined && body.dimensions !== provider.dimensions
+    if (modelChanging || dimsChanging) {
+      const config = await getOrCreateConfig()
+      const chainIds = [config.primary_id, config.backup1_id, config.backup2_id].filter(Boolean) as string[]
+      if (chainIds.includes(provider.id)) {
+        const newDim = body.dimensions !== undefined ? (body.dimensions as number | null) : provider.dimensions
+        const activeDim = await getActiveEmbeddingDimension()
+        if (activeDim !== null && newDim !== null && newDim !== activeDim) {
+          const seq = EmbeddingProvider.sequelize
+          if (seq) {
+            const [result] = await seq.query(
+              `SELECT COUNT(*) AS cnt FROM threat_knowledge WHERE embedding IS NOT NULL AND array_length(embedding::real[], 1) = :activeDim`,
+              { replacements: { activeDim }, type: 'SELECT' as any },
+            )
+            const atRiskCount = parseInt((result as any)?.cnt ?? 0, 10)
+            const ack = (req.body as Record<string, unknown>)['dimension_change_ack'] === true
+            if (atRiskCount > 0 && !ack) {
+              res.status(409).json({
+                error: 'dimension_change_requires_ack',
+                at_risk_count: atRiskCount,
+                active_dimension: activeDim,
+                new_dimension: newDim,
+              })
+              return
+            }
+          }
+        }
+      }
+    }
+
+    // Strip protocol-only field before update
+    delete (body as any)['dimension_change_ack']
 
     await provider.update(body)
     const json = provider.toJSON() as unknown as Record<string, unknown>
@@ -205,6 +243,97 @@ router.post('/:id/test', requireAuth, async (req: Request, res: Response): Promi
     })
 
     res.json({ data: result })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/embedding-providers/:id/models/lookup — admin only; fetch model list from upstream
+router.get('/:id/models/lookup', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isAdmin(req)) { res.status(403).json({ error: 'Admin access required' }); return }
+
+    const provider = await EmbeddingProvider.findByPk(req.params['id'])
+    if (!provider) { res.status(404).json({ error: 'Not found' }); return }
+
+    let apiKey = provider.api_key
+    if (apiKey) {
+      try { apiKey = providerKeyDecrypt(apiKey) } catch { /* use as-is */ }
+    }
+
+    try {
+      await validateEndpoint(provider.endpoint)
+    } catch (e: unknown) {
+      res.status(502).json({ error: 'Failed to connect to provider endpoint' })
+      return
+    }
+
+    const timeout = provider.timeout_ms ?? 30000
+    const models = await fetchModels(
+      { endpoint: provider.endpoint, apiKey, vendor: provider.vendor },
+      timeout,
+    )
+
+    res.json({ data: { models, note: 'Embedding model list is not filtered by capability — select the best fit for your use case.' } })
+  } catch (err: unknown) {
+    const msg = (err as Error).message ?? 'Unknown error'
+    console.error(`[models/lookup] ${req.params['id']}: ${msg}`)
+    res.status(502).json({ error: 'Failed to fetch models from provider' })
+  }
+})
+
+// GET /api/embedding-providers/:id/dimension-impact — admin only; check if dimension change would break existing embeddings
+router.get('/:id/dimension-impact', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isAdmin(req)) { res.status(403).json({ error: 'Admin access required' }); return }
+
+    const provider = await EmbeddingProvider.findByPk(req.params['id'])
+    if (!provider) { res.status(404).json({ error: 'Not found' }); return }
+
+    const newDim = parseInt(req.query['dimensions'] as string, 10)
+    if (isNaN(newDim)) {
+      res.status(400).json({ error: 'dimensions query param must be a number' }); return
+    }
+
+    const config = await getOrCreateConfig()
+    const chainIds = [config.primary_id, config.backup1_id, config.backup2_id].filter(Boolean) as string[]
+    const inChain = chainIds.includes(provider.id)
+
+    if (!inChain || newDim === provider.dimensions) {
+      res.json({ data: { in_chain: inChain, at_risk_count: 0 } })
+      return
+    }
+
+    const activeDim = await getActiveEmbeddingDimension()
+    if (activeDim === null) {
+      res.json({ data: { in_chain: true, active_dimension: null, new_dimension: newDim, at_risk_count: 0 } })
+      return
+    }
+
+    if (newDim === activeDim) {
+      res.json({ data: { in_chain: true, active_dimension: activeDim, new_dimension: newDim, at_risk_count: 0 } })
+      return
+    }
+
+    const seq = EmbeddingProvider.sequelize
+    if (!seq) { res.status(500).json({ error: 'Internal server error' }); return }
+
+    const [result] = await seq.query(
+      `SELECT COUNT(*) AS cnt FROM threat_knowledge WHERE embedding IS NOT NULL AND array_length(embedding::real[], 1) = :activeDim`,
+      { replacements: { activeDim }, type: 'SELECT' as any },
+    )
+
+    const atRiskCount = parseInt((result as any)?.cnt ?? 0, 10)
+
+    res.json({
+      data: {
+        in_chain: true,
+        active_dimension: activeDim,
+        new_dimension: newDim,
+        at_risk_count: atRiskCount,
+      },
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Internal server error' })

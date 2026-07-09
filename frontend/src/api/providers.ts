@@ -1,5 +1,6 @@
 import { apiFetch } from './client'
 import type { AiProvider } from './aiProviders'
+import { lookupAiProviderModels, setAiProviderAllowedModels } from './aiProviders'
 
 export type { AiProvider }
 
@@ -26,3 +27,5 @@ export async function updateProvider(id: string, payload: Partial<AiProvider>): 
   })
   return res.data
 }
+
+export { lookupAiProviderModels, setAiProviderAllowedModels }

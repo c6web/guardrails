@@ -23,6 +23,8 @@ struct AllProviderRow {
     price_per_1m_input:  Option<f64>,
     price_per_1m_output: Option<f64>,
     meter_period_start:  Option<chrono::DateTime<chrono::Utc>>,
+    #[sqlx(default)]
+    allowed_models:      Vec<String>,
 }
 
 pub(super) async fn load_all_providers(
@@ -30,18 +32,21 @@ pub(super) async fn load_all_providers(
     cache: &RwLock<HashMap<String, ProviderConfig>>,
 ) {
     let sql = r#"
-        SELECT id::text, name, endpoint, model, api_key, timeout_ms,
-               COALESCE(vendor, 'openai') AS vendor, max_output_token, max_input_token,
-               meter_mode, meter_metric,
-               meter_limit::FLOAT8         AS meter_limit,
-               meter_warning_limit::FLOAT8 AS meter_warning_limit,
-               meter_enforcement,
-               meter_reset_day::INT4        AS meter_reset_day,
-               price_per_1m_input::FLOAT8  AS price_per_1m_input,
-               price_per_1m_output::FLOAT8 AS price_per_1m_output,
-               meter_period_start
-        FROM ai_providers
-        WHERE status != 'unhealthy'
+        SELECT ap.id::text, ap.name, ap.endpoint, ap.model, ap.api_key, ap.timeout_ms,
+               COALESCE(ap.vendor, 'openai') AS vendor, ap.max_output_token, ap.max_input_token,
+               ap.meter_mode, ap.meter_metric,
+               ap.meter_limit::FLOAT8         AS meter_limit,
+               ap.meter_warning_limit::FLOAT8 AS meter_warning_limit,
+               ap.meter_enforcement,
+               ap.meter_reset_day::INT4        AS meter_reset_day,
+               ap.price_per_1m_input::FLOAT8  AS price_per_1m_input,
+               ap.price_per_1m_output::FLOAT8 AS price_per_1m_output,
+               ap.meter_period_start,
+               COALESCE(array_agg(pam.model_id) FILTER (WHERE pam.model_id IS NOT NULL), '{}') AS allowed_models
+        FROM ai_providers ap
+        LEFT JOIN ai_provider_allowed_models pam ON pam.ai_provider_id = ap.id
+        WHERE ap.status != 'unhealthy'
+        GROUP BY ap.id
     "#;
 
     match sqlx::query_as::<_, AllProviderRow>(sql).fetch_all(pool).await {
@@ -72,6 +77,7 @@ pub(super) async fn load_all_providers(
                     price_per_1m_input:  r.price_per_1m_input.unwrap_or(0.0),
                     price_per_1m_output: r.price_per_1m_output.unwrap_or(0.0),
                     meter_period_start:  r.meter_period_start,
+                    allowed_models:      r.allowed_models,
                 };
                 items.insert(r.id, cfg);
             }
@@ -134,6 +140,7 @@ pub(super) async fn load_classifier(store: &DetectorStore, pool: &PgPool) {
                 row.vendor,
                 row.max_output_token,
                 row.max_input_token,
+                vec![],
             );
             tracing::info!("[detector_loader] classifier: {} @ {}", p.name, p.endpoint);
             *store.classifier_provider.write().unwrap_or_else(|e| e.into_inner()) = Some(p);

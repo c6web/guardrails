@@ -262,13 +262,28 @@ async fn list_models(
         Some(ref pid) => {
             match state.policy_store.resolve_provider(pid) {
                 Some(p) => {
-                    let id = p.model.clone().unwrap_or_else(|| p.name.clone());
-                    vec![serde_json::json!({
-                        "id": id,
-                        "object": "model",
-                        "created": now_unix,
-                        "owned_by": p.vendor,
-                    })]
+                    if p.allowed_models.is_empty() {
+                        // Pre-migration provider: fall back to single default model
+                        let id = p.model.clone().unwrap_or_else(|| p.name.clone());
+                        vec![serde_json::json!({
+                            "id": id,
+                            "object": "model",
+                            "created": now_unix,
+                            "owned_by": p.vendor,
+                            "default": true,
+                        })]
+                    } else {
+                        p.allowed_models.iter().map(|m| {
+                            let is_default = p.model.as_deref() == Some(m.as_str());
+                            serde_json::json!({
+                                "id": m,
+                                "object": "model",
+                                "created": now_unix,
+                                "owned_by": p.vendor,
+                                "default": is_default,
+                            })
+                        }).collect()
+                    }
                 }
                 None => vec![],
             }
@@ -310,13 +325,27 @@ async fn model_detail(
     match auth.primary_provider_id {
         Some(ref pid) => {
             if let Some(p) = state.policy_store.resolve_provider(pid) {
-                let id = p.model.clone().unwrap_or_else(|| p.name.clone());
-                if id == model_id {
+                if p.allowed_models.is_empty() {
+                    // Pre-migration provider: match against single default model
+                    let id = p.model.clone().unwrap_or_else(|| p.name.clone());
+                    if id == model_id {
+                        let body = serde_json::json!({
+                            "id": id,
+                            "object": "model",
+                            "created": now_unix,
+                            "owned_by": p.vendor,
+                            "default": true,
+                        });
+                        return json_response(StatusCode::OK, &body.to_string());
+                    }
+                } else if p.allowed_models.iter().any(|m| m == &model_id) {
+                    let is_default = p.model.as_deref() == Some(&model_id);
                     let body = serde_json::json!({
-                        "id": id,
+                        "id": model_id,
                         "object": "model",
                         "created": now_unix,
                         "owned_by": p.vendor,
+                        "default": is_default,
                     });
                     return json_response(StatusCode::OK, &body.to_string());
                 }

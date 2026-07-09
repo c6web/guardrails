@@ -4,6 +4,7 @@ import { AiProvider } from '../models/data-db/AiProvider'
 import { UpstreamProviderLink } from '../models/data-db/UpstreamProviderLink'
 import { requireRole } from '../middleware/requireRole'
 import { runProviderTest } from '../utils/providerTest'
+import { syncAllowedModelDefault } from '../utils/syncAllowedModelDefault'
 import type { ILogStore } from '../logs/ILogStore'
 
 function createRouter(logStore: ILogStore): Router {
@@ -40,6 +41,10 @@ function createRouter(logStore: ILogStore): Router {
         max_input_token,
         notes,
       })
+
+      if (model !== undefined) {
+        await syncAllowedModelDefault(provider.id, model)
+      }
 
       res.json({ data: provider })
     } catch (err) {

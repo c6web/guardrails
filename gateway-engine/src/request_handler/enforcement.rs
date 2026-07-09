@@ -594,6 +594,7 @@ mod tests {
             "openai_compatible".into(),
             None,
             None,
+            vec![],
         )]
     }
 

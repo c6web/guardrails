@@ -1,12 +1,16 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express'
 import { AiProvider } from '../models/data-db/AiProvider'
+import { AiProviderAllowedModel } from '../models/data-db/AiProviderAllowedModel'
 import { UpstreamProviderLink } from '../models/data-db/UpstreamProviderLink'
 import { getOrCreateConfig } from '../models/data-db/ClassifierConfig'
 import { requireRole } from '../middleware/requireRole'
 import { runProviderTest } from '../utils/providerTest'
 import { providerKeyEncryptOnce, providerKeyDecrypt } from '../utils/gatewayKeyCrypto'
 import { triggerGatewayReload } from '../utils/gatewayReload'
+import { validateEndpoint } from '../utils/validateEndpoint'
+import { fetchModels } from '../utils/modelLookup'
+import { syncAllowedModelDefault } from '../utils/syncAllowedModelDefault'
 import { v4 as uuidv4 } from 'uuid'
 import type { ILogStore } from '../logs/ILogStore'
 
@@ -22,10 +26,21 @@ function createRouter(logStore: ILogStore): Router {
   router.get('/', requireRole('admin'), async (_req: Request, res: Response): Promise<void> => {
     try {
       const providers = await AiProvider.findAll({ order: [['name', 'ASC']] })
+      const providerIds = providers.map(p => p.id)
+      const allowedModels = await AiProviderAllowedModel.findAll({
+        where: { ai_provider_id: providerIds },
+      })
+      const modelsByProvider = new Map<string, string[]>()
+      for (const row of allowedModels) {
+        const list = modelsByProvider.get(row.ai_provider_id)
+        if (list) list.push(row.model_id)
+        else modelsByProvider.set(row.ai_provider_id, [row.model_id])
+      }
       const data = providers.map(p => {
         const json = p.toJSON() as unknown as Record<string, unknown>
         json['has_api_key'] = typeof json['api_key'] === 'string' && !!(json['api_key'] as string)
         delete json['api_key']
+        json['allowed_models'] = modelsByProvider.get(p.id) ?? []
         return json
       })
       res.json({ data })
@@ -40,7 +55,11 @@ function createRouter(logStore: ILogStore): Router {
     try {
       const provider = await AiProvider.findByPk(req.params['id'])
       if (!provider) { res.status(404).json({ error: 'Provider not found' }); return }
+      const allowedModels = await AiProviderAllowedModel.findAll({
+        where: { ai_provider_id: provider.id },
+      })
       const json = provider.toJSON() as unknown as Record<string, unknown>
+      json['allowed_models'] = allowedModels.map(m => m.model_id)
       if (typeof json['api_key'] === 'string' && json['api_key']) {
         try {
           const decrypted = providerKeyDecrypt(json['api_key'] as string)
@@ -78,6 +97,9 @@ function createRouter(logStore: ILogStore): Router {
         data_collection: typeof data_collection === 'string' ? data_collection : null,
         requests_24h: 0, errors_24h: 0, avg_latency_ms: 0,
       })
+      if (model) {
+        await syncAllowedModelDefault(providerId, model)
+      }
       triggerGatewayReload()
       const json = newProvider.toJSON() as unknown as Record<string, unknown>
       delete json['api_key']
@@ -115,6 +137,9 @@ function createRouter(logStore: ILogStore): Router {
         delete updates['api_key']
       }
       await provider.update(updates)
+      if (updates['model']) {
+        await syncAllowedModelDefault(provider.id, updates['model'] as string)
+      }
       triggerGatewayReload()
       const json = provider.toJSON() as unknown as Record<string, unknown>
       json['has_api_key'] = typeof json['api_key'] === 'string' && !!(json['api_key'] as string)
@@ -186,6 +211,81 @@ function createRouter(logStore: ILogStore): Router {
         triggered_by:     triggeredBy,
       }).catch((e: unknown) => console.error('[provider-call-log] classifier test log failed:', e))
       res.json({ data: result })
+    } catch (err) {
+      console.error(err)
+      res.status(500).json({ error: 'Internal server error' })
+    }
+  })
+
+  // GET /api/ai-providers/:id/models/lookup — admin only; fetch model list from upstream
+  router.get('/:id/models/lookup', requireRole('admin'), async (req: Request, res: Response): Promise<void> => {
+    try {
+      const provider = await AiProvider.findByPk(req.params['id'])
+      if (!provider) { res.status(404).json({ error: 'Provider not found' }); return }
+
+      let apiKey = provider.api_key
+      if (apiKey) {
+        try { apiKey = providerKeyDecrypt(apiKey) } catch { /* use as-is if decrypt fails */ }
+      }
+
+      try {
+        await validateEndpoint(provider.endpoint)
+      } catch (e: unknown) {
+        res.status(502).json({ error: 'Failed to connect to provider endpoint' })
+        return
+      }
+
+      const timeout = provider.timeout_ms ?? 30000
+      const models = await fetchModels(
+        { endpoint: provider.endpoint, apiKey, vendor: provider.vendor },
+        timeout,
+      )
+
+      res.json({ data: { models } })
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? 'Unknown error'
+      console.error(`[models/lookup] ${req.params['id']}: ${msg}`)
+      res.status(502).json({ error: 'Failed to fetch models from provider' })
+    }
+  })
+
+  // PUT /api/ai-providers/:id/allowed-models — admin only; set allowed models + default
+  router.put('/:id/allowed-models', requireRole('admin'), async (req: Request, res: Response): Promise<void> => {
+    try {
+      const provider = await AiProvider.findByPk(req.params['id'])
+      if (!provider) { res.status(404).json({ error: 'Provider not found' }); return }
+
+      const { models, default_model } = req.body as { models?: string[]; default_model?: string }
+      if (!Array.isArray(models) || models.length === 0) {
+        res.status(400).json({ error: 'models must be a non-empty array' })
+        return
+      }
+      if (!default_model || !models.includes(default_model)) {
+        res.status(400).json({ error: 'default_model must be one of the models in the array' })
+        return
+      }
+
+      const seq = AiProviderAllowedModel.sequelize
+      if (!seq) { res.status(500).json({ error: 'Internal server error' }); return }
+
+      await seq.transaction(async (t) => {
+        await AiProviderAllowedModel.destroy({
+          where: { ai_provider_id: provider.id },
+          transaction: t,
+        })
+        await AiProviderAllowedModel.bulkCreate(
+          models.map(modelId => ({
+            ai_provider_id: provider.id,
+            model_id: modelId,
+            is_default: modelId === default_model,
+          })),
+          { transaction: t },
+        )
+        await provider.update({ model: default_model }, { transaction: t })
+      })
+
+      triggerGatewayReload()
+      res.json({ data: { models, default_model } })
     } catch (err) {
       console.error(err)
       res.status(500).json({ error: 'Internal server error' })

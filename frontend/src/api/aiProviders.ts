@@ -8,6 +8,7 @@ export interface AiProvider {
   status: 'healthy' | 'degraded' | 'unhealthy'
   timeout_ms: number; requests_24h: number; errors_24h: number; avg_latency_ms: number
   is_default?: boolean
+  allowed_models?: string[]
 }
 
 export async function getAiProviders(): Promise<AiProvider[]> {
@@ -41,4 +42,18 @@ export async function updateAiProvider(id: string, payload: Partial<AiProvider>)
 
 export async function deleteAiProvider(id: string): Promise<void> {
   await apiFetch(`/api/ai-providers/${id}`, { method: 'DELETE' })
+}
+
+export async function lookupAiProviderModels(id: string): Promise<{ models: { id: string; label?: string }[] }> {
+  const res = await apiFetch<{ data: { models: { id: string; label?: string }[] } }>(
+    `/api/ai-providers/${id}/models/lookup`,
+  )
+  return res.data
+}
+
+export async function setAiProviderAllowedModels(id: string, models: string[], defaultModel: string): Promise<void> {
+  await apiFetch(`/api/ai-providers/${id}/allowed-models`, {
+    method: 'PUT',
+    body: JSON.stringify({ models, default_model: defaultModel }),
+  })
 }

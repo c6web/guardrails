@@ -17,6 +17,7 @@ pub fn apply_body_mutations(
     mut body: Value,
     max_output_token: Option<i32>,
     provider_model: Option<&str>,
+    allowed_models: &[String],
     adapter: &dyn LlmAdapter,
     is_streaming: bool,
     is_responses_api: bool,
@@ -37,19 +38,60 @@ pub fn apply_body_mutations(
         body["stream_options"] = serde_json::json!({ "include_usage": true });
     }
 
-    // The gateway is the authority on which model is used upstream — the client's
-    // requested model is never honored over the app's admin-configured provider model.
-    if let Some(model) = provider_model {
-        let client_model = body.get("model").and_then(|v| v.as_str());
-        if client_model != Some(model) {
-            // Model mismatch (or client omitted model) — record for review and warn so it
-            // is visible in live logs, not only the persisted request_mutations column.
-            tracing::warn!(
-                "[model] MODEL_MISMATCH client=\"{}\" overridden_to=\"{}\" vendor={}",
-                client_model.unwrap_or("absent"), model, adapter.vendor()
-            );
-            ledger.add("model", "overridden to provider's configured model", client_model.unwrap_or("absent"), model);
-            body["model"] = serde_json::json!(model);
+    // Model enforcement: the gateway can restrict which models clients may request.
+    // When `allowed_models` is empty (pre-migration, no configure models), fall back
+    // to the original unconditional-override behavior for backward compatibility.
+    // When `allowed_models` is non-empty, only models in the list are accepted;
+    // all others (or absent) are overridden to the provider's configured default.
+    if allowed_models.is_empty() {
+        // Pre-migration path: unconditional override (original behavior)
+        if let Some(model) = provider_model {
+            let client_model = body.get("model").and_then(|v| v.as_str());
+            if client_model != Some(model) {
+                tracing::warn!(
+                    "[model] MODEL_MISMATCH client=\"{}\" overridden_to=\"{}\" vendor={}",
+                    client_model.unwrap_or("absent"), model, adapter.vendor()
+                );
+                ledger.add("model", "overridden to provider's configured model", client_model.unwrap_or("absent"), model);
+                body["model"] = serde_json::json!(model);
+            }
+        }
+    } else {
+        // Allow-list enforcement
+        match body.get("model").and_then(|v| v.as_str()) {
+            Some(client_model) if allowed_models.iter().any(|m| m == client_model) => {
+                // client's requested model is allowed — forward as-is, no mutation
+            }
+            Some(client_model) => {
+                // not in allowed set — fall back to default (if configured)
+                if let Some(default) = provider_model {
+                    if client_model != default {
+                        tracing::warn!(
+                            "[model] MODEL_NOT_ALLOWED client=\"{}\" overridden_to=\"{}\"",
+                            client_model, default,
+                        );
+                        ledger.add(
+                            "model",
+                            "not in allowed set — overridden to provider's default model",
+                            client_model,
+                            default,
+                        );
+                        body["model"] = serde_json::json!(default);
+                    }
+                }
+            }
+            None => {
+                // client omitted model entirely — use default
+                if let Some(default) = provider_model {
+                    body["model"] = serde_json::json!(default);
+                    ledger.add(
+                        "model",
+                        "not specified by client — set to provider's default model",
+                        "absent",
+                        default,
+                    );
+                }
+            }
         }
     }
 
@@ -111,7 +153,7 @@ mod tests {
     #[test]
     fn chat_completion_streaming_injects_stream_options() {
         let body = json!({ "model": "gpt-4o", "stream": true });
-        let (out, ledger) = apply_body_mutations(body, None, None, &OpenAiAdapter, true, false);
+        let (out, ledger) = apply_body_mutations(body, None, None, &[], &OpenAiAdapter, true, false);
         assert_eq!(out["stream_options"]["include_usage"], json!(true));
         assert!(ledger.is_some(), "ledger should record the stream_options injection");
     }
@@ -121,18 +163,70 @@ mod tests {
     #[test]
     fn responses_api_streaming_skips_stream_options() {
         let body = json!({ "model": "gpt-4o", "stream": true });
-        let (out, ledger) = apply_body_mutations(body, None, None, &OpenAiAdapter, true, true);
+        let (out, ledger) = apply_body_mutations(body, None, None, &[], &OpenAiAdapter, true, true);
         assert!(out.get("stream_options").is_none(), "stream_options must not be injected for /v1/responses");
         assert!(ledger.is_none(), "no mutation expected for a streaming responses request with no model override");
     }
 
-    // Provider model override fires regardless of endpoint (still authoritative).
+    // Pre-migration backward compatibility: empty allowed_models keeps unconditional override.
     #[test]
-    fn provider_model_override_applies_for_responses() {
+    fn pre_migration_unconditional_override() {
         let body = json!({ "model": "client-model", "stream": true });
-        let (out, ledger) = apply_body_mutations(body, None, Some("provider-model"), &OpenAiAdapter, true, true);
+        let (out, ledger) = apply_body_mutations(body, None, Some("provider-model"), &[], &OpenAiAdapter, true, true);
         assert_eq!(out["model"], json!("provider-model"));
         assert!(out.get("stream_options").is_none());
         assert!(ledger.is_some());
+    }
+
+    // Allow-list: client model in allowed set → forwarded as-is.
+    #[test]
+    fn allow_list_model_allowed() {
+        let allowed = vec!["gpt-4".to_string(), "gpt-4o".to_string()];
+        let body = json!({ "model": "gpt-4o" });
+        let (out, ledger) = apply_body_mutations(body, None, Some("gpt-4"), &allowed, &OpenAiAdapter, false, false);
+        assert_eq!(out["model"], json!("gpt-4o"), "allowed model must pass through unchanged");
+        assert!(ledger.is_none(), "no mutation expected when client model is in allowed set");
+    }
+
+    // Allow-list: client model NOT in allowed set → overridden to default.
+    #[test]
+    fn allow_list_model_not_allowed() {
+        let allowed = vec!["gpt-4".to_string(), "gpt-4o".to_string()];
+        let body = json!({ "model": "claude-3" });
+        let (out, ledger) = apply_body_mutations(body, None, Some("gpt-4"), &allowed, &OpenAiAdapter, false, false);
+        assert_eq!(out["model"], json!("gpt-4"), "disallowed model must be overridden to default");
+        assert!(ledger.is_some(), "ledger must record the model override");
+    }
+
+    // Allow-list: client omitted model → set to default.
+    #[test]
+    fn allow_list_model_absent() {
+        let allowed = vec!["gpt-4".to_string(), "gpt-4o".to_string()];
+        let body = json!({});
+        let (out, ledger) = apply_body_mutations(body, None, Some("gpt-4"), &allowed, &OpenAiAdapter, false, false);
+        assert_eq!(out["model"], json!("gpt-4"), "absent model must be set to default");
+        assert!(ledger.is_some(), "ledger must record the model injection");
+    }
+
+    // Allow-list: client model already equals default → no override even if not in allowed set
+    // (admin configured the same model as both default and the only allowed model).
+    #[test]
+    fn allow_list_model_equals_default_skips_override() {
+        let allowed = vec!["gpt-4".to_string()];
+        let body = json!({ "model": "gpt-4" });
+        let (out, ledger) = apply_body_mutations(body, None, Some("gpt-4"), &allowed, &OpenAiAdapter, false, false);
+        assert_eq!(out["model"], json!("gpt-4"));
+        assert!(ledger.is_none(), "no mutation when client model equals default");
+    }
+
+    // Allow-list: client model not allowed AND no default model → pass through unchanged
+    // (no default to fall back to, so the client model reaches the upstream which will reject it).
+    #[test]
+    fn allow_list_no_default_passthrough() {
+        let allowed = vec!["gpt-4".to_string()];
+        let body = json!({ "model": "claude-3" });
+        let (out, ledger) = apply_body_mutations(body, None, None, &allowed, &OpenAiAdapter, false, false);
+        assert_eq!(out["model"], json!("claude-3"), "no default — pass client model through");
+        assert!(ledger.is_none(), "no mutation when no default model configured");
     }
 }

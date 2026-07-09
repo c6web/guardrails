@@ -78,6 +78,7 @@ pub(crate) struct ProviderConfig {
     pub price_per_1m_input:  f64,
     pub price_per_1m_output: f64,
     pub meter_period_start:  Option<chrono::DateTime<chrono::Utc>>,
+    pub allowed_models:      Vec<String>,
 }
 
 impl ProviderConfig {
@@ -93,6 +94,7 @@ impl ProviderConfig {
         vendor: String,
         max_output_token: Option<i32>,
         max_input_token: Option<i32>,
+        allowed_models: Vec<String>,
     ) -> Self {
         Self {
             id,
@@ -113,6 +115,7 @@ impl ProviderConfig {
             price_per_1m_input: 0.0,
             price_per_1m_output: 0.0,
             meter_period_start: None,
+            allowed_models,
         }
     }
 }

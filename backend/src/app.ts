@@ -57,6 +57,7 @@ import { initT2AgentPromptModel } from './models/data-db/T2AgentPrompt'
 import { initReviewConfigModel, associateReviewConfig } from './models/data-db/ReviewConfig'
 import { initContentQualityJudgePromptModel } from './models/data-db/ContentQualityJudgePrompt'
 import { initContentQualityProviderConfigModel, associateContentQualityProviderConfig } from './models/data-db/ContentQualityProviderConfig'
+import { initAiProviderAllowedModelModel, AiProviderAllowedModel } from './models/data-db/AiProviderAllowedModel'
 import { initQualityReviewLogModel } from './models/logs-db/QualityReviewLog'
 import { initResponseCacheModel } from './models/logs-db/ResponseCache'
 import { initResponseCacheConfigModel } from './models/data-db/ResponseCacheConfig'
@@ -77,6 +78,7 @@ async function bootstrap(): Promise<void> {
   initConnectedAppModel(sequelizeDataDb)
   initAiProviderModel(sequelizeDataDb)
   initUpstreamProviderLinkModel(sequelizeDataDb)
+  initAiProviderAllowedModelModel(sequelizeDataDb)
   initClassifierConfigModel(sequelizeDataDb)
   initApiKeyModel(sequelizeDataDb)
   initApiKeyVersionModel(sequelizeDataDb)
@@ -152,6 +154,8 @@ async function bootstrap(): Promise<void> {
   })
   AiProvider.hasOne(UpstreamProviderLink, { foreignKey: 'ai_provider_id', as: 'upstreamLink', onDelete: 'CASCADE' })
   UpstreamProviderLink.belongsTo(AiProvider, { foreignKey: 'ai_provider_id' })
+  AiProvider.hasMany(AiProviderAllowedModel, { foreignKey: 'ai_provider_id', onDelete: 'CASCADE' })
+  AiProviderAllowedModel.belongsTo(AiProvider, { foreignKey: 'ai_provider_id' })
   // NotificationLog moved to logs-db — cross-DB association removed (different connections)
   NetworkAclList.hasMany(NetworkAclEntry, { foreignKey: 'list_id', as: 'entries', onDelete: 'CASCADE' })
   NetworkAclEntry.belongsTo(NetworkAclList, { foreignKey: 'list_id', as: 'list' })
