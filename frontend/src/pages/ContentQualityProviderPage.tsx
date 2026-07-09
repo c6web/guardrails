@@ -28,7 +28,7 @@ const TAB_STYLE = (active: boolean): React.CSSProperties => ({
 function ReasonView({ reason }: { reason: string }) {
   // Strip Python dict wrapper {'reasons': '...'} — handle anywhere in text
   // Convert literal \n sequences to real newlines (API may return escaped newlines)
-  let clean = reason.replace(/\{'reasons':\s*'/g, '').replace(/'}/g, '').replace(/\\n/g, '\n').trim()
+  const clean = reason.replace(/\{'reasons':\s*'/g, '').replace(/'}/g, '').replace(/\\n/g, '\n').trim()
 
   // Parse structured fields from a text block
   function parseBlock(text: string) {

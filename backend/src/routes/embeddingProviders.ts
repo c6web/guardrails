@@ -260,7 +260,7 @@ router.post('/models/lookup', requireAuth, async (req: Request, res: Response): 
 
     try {
       await validateEndpoint(endpoint)
-    } catch (e: unknown) {
+    } catch {
       res.status(502).json({ error: 'Failed to connect to provider endpoint' })
       return
     }
@@ -289,7 +289,7 @@ router.get('/:id/models/lookup', requireAuth, async (req: Request, res: Response
 
     try {
       await validateEndpoint(provider.endpoint)
-    } catch (e: unknown) {
+    } catch {
       res.status(502).json({ error: 'Failed to connect to provider endpoint' })
       return
     }

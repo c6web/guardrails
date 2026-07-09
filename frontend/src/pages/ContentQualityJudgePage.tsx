@@ -1,7 +1,8 @@
 import React from 'react'
 import { PageHeader, Breadcrumbs, Chip, EmptyState, ErrorState, DataTable, type ColumnDef } from '../components/ui'
 import { Plus, Pencil, Trash2, Bolt, Brain, Refresh, ShieldCheck } from '../components/ui/Icons'
-import ActionCell, { ActionDef } from '../components/ui/ActionCell'
+import ActionCell from '../components/ui/ActionCell'
+import type { ActionDef } from '../components/ui/ActionCell'
 import {
   getContentQualityJudgePrompts, createContentQualityJudgePrompt, updateContentQualityJudgePrompt,
   deleteContentQualityJudgePrompt, setActiveContentQualityJudgePrompt, restoreDefaultContentQualityJudgePrompt,

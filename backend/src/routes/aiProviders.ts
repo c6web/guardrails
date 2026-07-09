@@ -226,7 +226,7 @@ function createRouter(logStore: ILogStore): Router {
 
       try {
         await validateEndpoint(endpoint)
-      } catch (e: unknown) {
+      } catch {
         res.status(502).json({ error: 'Failed to connect to provider endpoint' })
         return
       }
@@ -253,7 +253,7 @@ function createRouter(logStore: ILogStore): Router {
 
       try {
         await validateEndpoint(provider.endpoint)
-      } catch (e: unknown) {
+      } catch {
         res.status(502).json({ error: 'Failed to connect to provider endpoint' })
         return
       }
