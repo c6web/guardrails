@@ -423,6 +423,76 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
     }
   })
 
+  // POST /api/threat-knowledge/embed-new/stream — admin only, batch embed entries without embeddings, SSE progress
+  router.post('/embed-new/stream', async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!canManageKnowledge(req)) { res.status(403).json({ error: 'Admin or Knowledge admin access required' }); return }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      })
+
+      const entries = await ThreatKnowledge.findAll({
+        where: {
+          threat_context: { [Op.not]: null, [Op.ne]: '' },
+          embedding: null,
+        },
+        order: [['created_at', 'ASC']],
+      })
+
+      if (entries.length === 0) {
+        res.write(`event: complete\ndata: {"total":0,"succeeded":0,"failed":0,"regenerated":0,"triggered_reload":false}\n\n`)
+        res.end()
+        return
+      }
+
+      let succeeded = 0
+      let failed = 0
+      let regenerated = 0
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i]
+        const current = i + 1
+        const total = entries.length
+
+        try {
+          const embResult = await generateEmbeddingWithMetadata(entry.threat_context!, logStore, 'threat-knowledge-embed-new')
+          await entry.update({ embedding: embResult.embedding, embedding_at: new Date() })
+          succeeded++
+          regenerated++
+          const payload = JSON.stringify({ current, total, succeeded, failed, entry_name: entry.name, success: true, skipped: false })
+          res.write(`event: progress\ndata: ${payload}\n\n`)
+        } catch (err) {
+          failed++
+          const errorMsg = (err as Error).message
+          console.error(`embed-new-stream: failed for "${entry.name}":`, err)
+          const payload = JSON.stringify({ current, total, succeeded, failed, entry_name: entry.name, success: false, error: errorMsg, skipped: false })
+          res.write(`event: progress\ndata: ${payload}\n\n`)
+        }
+      }
+
+      const triggered = succeeded > 0
+      if (triggered) {
+        await triggerGatewayReload()
+      }
+
+      const completePayload = JSON.stringify({ total: entries.length, succeeded, failed, regenerated, triggered_reload: triggered })
+      res.write(`event: complete\ndata: ${completePayload}\n\n`)
+      res.end()
+    } catch (err) {
+      console.error(err)
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' })
+      } else {
+        res.write(`event: error\ndata: ${JSON.stringify({ error: (err as Error).message })}\n\n`)
+        res.end()
+      }
+    }
+  })
+
   // POST /api/threat-knowledge/embed-all — admin only, batch embed all records with threat_context
   router.post('/embed-all', async (req: Request, res: Response): Promise<void> => {
     try {

@@ -59,6 +59,7 @@ const ThreatKnowledgePage: React.FC<ThreatKnowledgePageProps> = () => {
   const [toast, setToast] = React.useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
 
   const [showEmbedAllModal, setShowEmbedAllModal] = React.useState(false)
+  const [showEmbedNewModal, setShowEmbedNewModal] = React.useState(false)
   const [showReviewModal, setShowReviewModal] = React.useState<'all' | 'new' | null>(null)
   const [singleReviewTarget, setSingleReviewTarget] = React.useState<{ id: string; name: string } | null>(null)
   const [reEmbedTarget, setReEmbedTarget] = React.useState<ThreatKnowledge | null>(null)
@@ -141,6 +142,10 @@ const ThreatKnowledgePage: React.FC<ThreatKnowledgePageProps> = () => {
     setShowEmbedAllModal(true)
   }
 
+  function handleEmbedNew() {
+    setShowEmbedNewModal(true)
+  }
+
   function handleReviewItem(item: ThreatKnowledge) {
     setReviewTarget(item)
   }
@@ -158,6 +163,12 @@ const ThreatKnowledgePage: React.FC<ThreatKnowledgePageProps> = () => {
 
   async function handleEmbedAllDone() {
     setShowEmbedAllModal(false)
+    setToast({ msg: 'Embedding complete', kind: 'ok' })
+    await loadRef.current(page)
+  }
+
+  async function handleEmbedNewDone() {
+    setShowEmbedNewModal(false)
     setToast({ msg: 'Embedding complete', kind: 'ok' })
     await loadRef.current(page)
   }
@@ -370,7 +381,7 @@ await loadRef.current(page)
     <div className="page fade-in">
       <Breadcrumbs pageId="threat-knowledge" />
       <PageHeader title="Threat knowledge" subtitle="Security threat definitions used by Tier 1 LLM threat lookup to match incoming prompts against known attack patterns. Browse OWASP LLM Top 10 reference entries, add custom threats with semantic embeddings, and search by similarity."
-        actions={<>{canManage && <><button key="btn-embed-all" className="btn btn-ghost btn-sm" onClick={handleEmbedAll} disabled={totalCount === 0}>Embed All</button><button key="btn-review-all" className="btn btn-ghost btn-sm" onClick={() => setShowReviewModal('all')} style={{ color: 'var(--accent)' }}>Review All</button><button key="btn-review-new" className="btn btn-ghost btn-sm" onClick={() => setShowReviewModal('new')} style={{ color: 'var(--info)' }}>Review New Items</button></>}<button key="btn-semantic-test" className="btn btn-ghost btn-sm" onClick={() => setShowSemanticTest(true)}>Test Threat Knowledge</button>{canManage && <button key="btn-create" className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus w={13} /> New entry</button>}</>} />
+        actions={<>{canManage && <><button key="btn-embed-all" className="btn btn-ghost btn-sm" onClick={handleEmbedAll} disabled={totalCount === 0}>Embed All</button><button key="btn-embed-new" className="btn btn-ghost btn-sm" onClick={handleEmbedNew} disabled={totalCount === 0}>Embed New</button><button key="btn-review-all" className="btn btn-ghost btn-sm" onClick={() => setShowReviewModal('all')} style={{ color: 'var(--accent)' }}>Review All</button><button key="btn-review-new" className="btn btn-ghost btn-sm" onClick={() => setShowReviewModal('new')} style={{ color: 'var(--info)' }}>Review New Items</button></>}<button key="btn-semantic-test" className="btn btn-ghost btn-sm" onClick={() => setShowSemanticTest(true)}>Test Threat Knowledge</button>{canManage && <button key="btn-create" className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus w={13} /> New entry</button>}</>} />
 
       {/* Stat cards */}
       {!loading && totalCount > 0 && (
@@ -510,7 +521,12 @@ await loadRef.current(page)
 
       {/* Embed all progress modal */}
       {showEmbedAllModal && (
-        <EmbedAllProgressModal onClose={handleEmbedAllDone} />
+        <EmbedAllProgressModal mode="all" onClose={() => setShowEmbedAllModal(false)} onComplete={handleEmbedAllDone} />
+      )}
+
+      {/* Embed new progress modal */}
+      {showEmbedNewModal && (
+        <EmbedAllProgressModal mode="new" onClose={() => setShowEmbedNewModal(false)} onComplete={handleEmbedNewDone} />
       )}
 
       {/* Review all progress modal */}

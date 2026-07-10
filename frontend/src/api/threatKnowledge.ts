@@ -157,6 +157,74 @@ export interface EmbedCompleteEvent {
   triggered_reload: boolean
 }
 
+export function embedNewThreatKnowledgeStream(
+  onProgress: (e: EmbedProgressEvent) => void,
+  onComplete: (e: EmbedCompleteEvent) => void,
+  onError: (err: string) => void,
+): { abort: () => void } {
+  const controller = new AbortController()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+  }
+
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  fetch('/api/threat-knowledge/embed-new/stream', {
+    method: 'POST',
+    headers,
+    signal: controller.signal,
+  }).then(async resp => {
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '')
+      onError(`HTTP ${resp.status}: ${text}`)
+      return
+    }
+
+    const reader = resp.body?.getReader()
+    if (!reader) { onError('Response body not readable'); return }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      let eventType = ''
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim()
+          try {
+            const parsed = JSON.parse(data)
+            if (eventType === 'progress') {
+              onProgress(parsed as EmbedProgressEvent)
+            } else if (eventType === 'complete') {
+              onComplete(parsed as EmbedCompleteEvent)
+            } else if (eventType === 'error') {
+              onError(parsed.error || 'Unknown stream error')
+            }
+          } catch { /* skip malformed JSON lines */ }
+          eventType = ''
+        }
+      }
+    }
+  }).catch(err => {
+    if (err instanceof DOMException && err.name === 'AbortError') return
+    onError((err as Error).message || 'Stream connection failed')
+  })
+
+  return { abort: () => controller.abort() }
+}
+
 export function embedAllThreatKnowledgeStream(
   force: boolean,
   onProgress: (e: EmbedProgressEvent) => void,
