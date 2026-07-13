@@ -4,6 +4,7 @@ import { Op, QueryTypes } from 'sequelize'
 import { toSql } from 'pgvector'
 import type { ILogStore } from '../logs/ILogStore'
 import { ThreatKnowledge } from '../models/data-db/ThreatKnowledge'
+import { DetectionFramework } from '../models/data-db/DetectionFramework'
 import { canManageKnowledge } from '../middleware/auth'
 import {
   generateEmbedding,
@@ -15,6 +16,13 @@ import { triggerGatewayReload } from '../utils/gatewayReload'
 
 export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
   const router = Router()
+
+  const FRAMEWORK_INCLUDE = [{
+    model: DetectionFramework,
+    as: 'detectionFrameworks',
+    through: { attributes: [] },
+    required: false,
+  }]
 
   async function getEmbeddingStatus(embedding: number[] | null, activeDim: number | null): Promise<string> {
     if (embedding === null) return 'no-embedding'
@@ -72,6 +80,7 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
       const search = req.query['search'] as string | undefined
       const statusFilter = req.query['status'] as string | undefined
       const sourceFilter = req.query['source'] as string | undefined
+      const frameworkId = req.query['framework_id'] as string | undefined
       const page = Math.max(1, parseInt(req.query['page'] as string || '1', 10))
       const limit = Math.min(200, Math.max(1, parseInt(req.query['limit'] as string || '50', 10)))
       const offset = (page - 1) * limit
@@ -92,12 +101,17 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
       const validCols = ['name', 'description', 'created_at', 'updated_at']
       const orderCol = validCols.includes(sortCol) ? sortCol : 'name'
 
-      const total = await ThreatKnowledge.count({ where })
-      const rows = await ThreatKnowledge.findAll({
+      const include = frameworkId
+        ? [{ ...FRAMEWORK_INCLUDE[0], required: true, where: { id: frameworkId } }]
+        : FRAMEWORK_INCLUDE
+
+      const { count: total, rows } = await ThreatKnowledge.findAndCountAll({
         where,
         limit,
         offset,
+        include,
         order: [[orderCol, orderDir]],
+        distinct: true,
       })
 
       const activeDim = await getActiveEmbeddingDimension()
@@ -157,7 +171,7 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
   // GET /api/threat-knowledge/:id — viewer+
   router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     try {
-      const entry = await ThreatKnowledge.findByPk(req.params['id'])
+      const entry = await ThreatKnowledge.findByPk(req.params['id'], { include: FRAMEWORK_INCLUDE })
       if (!entry) { res.status(404).json({ error: 'Not found' }); return }
       const activeDim = await getActiveEmbeddingDimension()
       const enriched = await enrichWithStatus(entry, activeDim)
@@ -173,7 +187,7 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
     try {
       if (!canManageKnowledge(req)) { res.status(403).json({ error: 'Admin or Knowledge admin access required' }); return }
 
-      const { name, description, threat_context } = req.body as Record<string, unknown>
+      const { name, description, threat_context, framework_ids } = req.body as Record<string, unknown>
       if (!name || typeof name !== 'string' || !name.trim()) {
         res.status(400).json({ error: 'name is required' }); return
       }
@@ -192,6 +206,14 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
         status:         'active',
         source:         'manual',
       })
+
+      // Link frameworks if provided
+      if (framework_ids && Array.isArray(framework_ids) && framework_ids.length > 0) {
+        for (const fid of framework_ids) {
+          const fw = await DetectionFramework.findByPk(fid)
+          if (fw) await entry.addDetectionFrameworks(fw)
+        }
+      }
 
       // Auto-generate embedding if threat_context is provided (non-blocking)
       if (tc) {
@@ -220,7 +242,7 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
       const entry = await ThreatKnowledge.findByPk(req.params['id'])
       if (!entry) { res.status(404).json({ error: 'Not found' }); return }
 
-      const { name, description, threat_context } = req.body as Record<string, unknown>
+      const { name, description, threat_context, framework_ids } = req.body as Record<string, unknown>
       const updates: Record<string, unknown> = {}
       if (name           !== undefined) updates['name']           = (name as string).trim()
       if (description    !== undefined) updates['description']    = (description as string).trim()
@@ -228,6 +250,22 @@ export function createThreatKnowledgeRouter(logStore: ILogStore): Router {
       updates['updated_by'] = req.user?.userId ?? null
 
       await entry.update(updates)
+
+      // Update framework linkages if provided
+      if (framework_ids !== undefined && Array.isArray(framework_ids)) {
+        const current = await entry.getDetectionFrameworks()
+        const currentIds = new Set(current.map(f => f.id))
+        const newIds = new Set(framework_ids)
+        for (const fw of current) {
+          if (!newIds.has(fw.id)) await entry.removeDetectionFrameworks(fw)
+        }
+        for (const fid of framework_ids) {
+          if (!currentIds.has(fid)) {
+            const fw = await DetectionFramework.findByPk(fid)
+            if (fw) await entry.addDetectionFrameworks(fw)
+          }
+        }
+      }
 
       // Re-generate embedding if threat_context changed and no valid embedding exists
       const tcVal = (threat_context as string | null | undefined)

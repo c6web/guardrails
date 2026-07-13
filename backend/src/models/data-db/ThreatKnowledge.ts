@@ -49,6 +49,11 @@ export class ThreatKnowledge
   declare quality_reviewed_by: string | null
   declare readonly created_at: Date
   declare readonly updated_at: Date
+
+  detectionFrameworks?: DetectionFramework[]
+  declare getDetectionFrameworks: () => Promise<DetectionFramework[]>
+  declare addDetectionFrameworks: (frameworks: DetectionFramework | DetectionFramework[]) => Promise<void>
+  declare removeDetectionFrameworks: (frameworks: DetectionFramework | DetectionFramework[]) => Promise<void>
 }
 
 export function initThreatKnowledgeModel(sequelize: Sequelize): typeof ThreatKnowledge {

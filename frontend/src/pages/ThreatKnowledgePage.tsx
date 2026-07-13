@@ -49,6 +49,7 @@ const ThreatKnowledgePage: React.FC<ThreatKnowledgePageProps> = () => {
 
   const [search, setSearch] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState<string>('')
+  const [frameworkFilter, setFrameworkFilter] = React.useState<string>('')
   const [approveRejectBusy, setApproveRejectBusy] = React.useState<Record<string, boolean>>({})
 
   const [showCreate, setShowCreate] = React.useState(false)
@@ -78,7 +79,7 @@ const ThreatKnowledgePage: React.FC<ThreatKnowledgePageProps> = () => {
     setLoading(true); setLoadError(null)
     try {
       const [{ data: tkData, meta }, frameworksRes, statsRes] = await Promise.all([
-        getAllThreatKnowledge({ page: p, limit: 50, search: search || undefined, sort: 'name', order: 'asc', status: statusFilter || undefined }),
+        getAllThreatKnowledge({ page: p, limit: 50, search: search || undefined, sort: 'name', order: 'asc', status: statusFilter || undefined, framework_id: frameworkFilter || undefined }),
         getAllDetectionFrameworks(),
         getThreatKnowledgeStats(),
       ])
@@ -103,7 +104,7 @@ const ThreatKnowledgePage: React.FC<ThreatKnowledgePageProps> = () => {
     } finally { setLoading(false) }
   })
 
-  React.useEffect(() => { loadRef.current(1) }, [search, statusFilter])
+  React.useEffect(() => { loadRef.current(1) }, [search, statusFilter, frameworkFilter])
 
   React.useEffect(() => {
     if (!toast) return
@@ -437,6 +438,12 @@ await loadRef.current(page)
           <option value="active">Active</option>
           <option value="pending">Pending review</option>
           <option value="rejected">Rejected</option>
+        </select>
+        <select className="select" style={{ width: 180 }} value={frameworkFilter} onChange={e => setFrameworkFilter(e.target.value)}>
+          <option value="">All frameworks</option>
+          {allFrameworks.map(fw => (
+            <option key={fw.id} value={fw.id}>{fw.framework_code} — {fw.name}</option>
+          ))}
         </select>
         <div style={{ flex: 1 }} />
         {!loading && <span className="caption">{totalCount.toLocaleString()} entries</span>}

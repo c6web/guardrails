@@ -77,6 +77,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
       return
     }
     const search = req.query['search'] as string | undefined
+    const frameworkId = req.query['framework_id'] as string | undefined
     const page  = Math.max(1, parseInt(req.query['page']  as string || '1', 10))
     const limit = Math.min(100, Math.max(1, parseInt(req.query['limit'] as string || '50', 10)))
     const offset = (page - 1) * limit
@@ -94,13 +95,17 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
     const validCols = ['name', 'description', 'created_at', 'updated_at']
     const orderCol = validCols.includes(sortCol) ? sortCol : 'name'
 
-    const total = await Detector.count({ where })
-    const detectors = await Detector.findAll({
+    const include = frameworkId
+      ? [{ ...FRAMEWORK_INCLUDE[0], required: true, where: { id: frameworkId } }]
+      : FRAMEWORK_INCLUDE
+
+    const { count: total, rows: detectors } = await Detector.findAndCountAll({
       where,
       limit,
       offset,
-      include: FRAMEWORK_INCLUDE,
+      include,
       order: [[orderCol, orderDir]],
+      distinct: true,
     })
     res.json({ data: detectors.map(d => d.toJSON()), meta: { page, limit, total, totalPages: Math.ceil(total / limit) } })
   } catch (err) {

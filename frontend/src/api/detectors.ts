@@ -93,13 +93,14 @@ export async function getDetectorQualityStats(): Promise<QualityStats> {
   return res.data
 }
 
-export async function getDetectors(params?: { page?: number; limit?: number; search?: string; sort?: string; order?: 'asc' | 'desc' }): Promise<{ data: UIDetector[]; meta: DetectorMeta }> {
+export async function getDetectors(params?: { page?: number; limit?: number; search?: string; sort?: string; order?: 'asc' | 'desc'; framework_id?: string }): Promise<{ data: UIDetector[]; meta: DetectorMeta }> {
   const q = new URLSearchParams()
   if (params?.page)  q.set('page',  String(params.page))
   if (params?.limit) q.set('limit', String(params.limit))
   if (params?.search && params.search.trim()) q.set('search', params.search.trim())
   if (params?.sort) q.set('sort', params.sort)
   if (params?.order) q.set('order', params.order)
+  if (params?.framework_id) q.set('framework_id', params.framework_id)
   const url = q.toString() ? `/api/detectors?${q}` : '/api/detectors'
   const res = await apiFetch<{ data: ApiDetector[]; meta: DetectorMeta }>(url)
   return { data: res.data.map(mapDetector), meta: res.meta }

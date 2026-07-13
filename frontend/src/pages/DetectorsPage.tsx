@@ -28,6 +28,7 @@ const DetectorsPage: React.FC<DetectorsPageProps> = () => {
 
   const [detectors, setDetectors] = React.useState<UIDetector[]>([])
   const [frameworks, setFrameworks] = React.useState<Record<string, any>>({})
+  const [frameworkList, setFrameworkList] = React.useState<Array<{ id: string; framework_code: string; name: string }>>([])
   const [loading,    setLoading]     = React.useState(true)
   const [loadError,  setLoadError]   = React.useState<string | null>(null)
   const [busy,       setBusy]        = React.useState(false)
@@ -37,6 +38,7 @@ const DetectorsPage: React.FC<DetectorsPageProps> = () => {
   const [totalCount, setTotalCount]  = React.useState(0)
 
   const [search, setSearch] = React.useState('')
+  const [frameworkFilter, setFrameworkFilter] = React.useState<string>('')
 
   const [qualityStats, setQualityStats] = React.useState<QualityStats | null>(null)
 
@@ -53,7 +55,7 @@ const DetectorsPage: React.FC<DetectorsPageProps> = () => {
     setLoading(true); setLoadError(null)
     try {
       const [dets, fws, qs] = await Promise.all([
-        getDetectors({ page: p, limit: 50, search, sort: 'name', order: 'asc' }),
+        getDetectors({ page: p, limit: 50, search, sort: 'name', order: 'asc', framework_id: frameworkFilter || undefined }),
         getFrameworks(),
         getDetectorQualityStats().catch(() => null),
       ])
@@ -65,10 +67,11 @@ const DetectorsPage: React.FC<DetectorsPageProps> = () => {
       const fwMap: Record<string, any> = {}
       for (const fw of fws) fwMap[fw.id] = fw
       setFrameworks(fwMap)
+      setFrameworkList(fws)
     } catch (err) {
       setLoadError((err as Error).message || 'Failed to load')
     } finally { setLoading(false) }
-  }, [search])
+  }, [search, frameworkFilter])
 
   React.useEffect(() => { load(1) }, [load])
 
@@ -236,6 +239,12 @@ const DetectorsPage: React.FC<DetectorsPageProps> = () => {
        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
         <input className="input" type="search" placeholder="Search name, description…"
           value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+        <select className="select" style={{ width: 180 }} value={frameworkFilter} onChange={e => setFrameworkFilter(e.target.value)}>
+          <option value="">All frameworks</option>
+          {frameworkList.map(fw => (
+            <option key={fw.id} value={fw.id}>{fw.framework_code} — {fw.name}</option>
+          ))}
+        </select>
         <div style={{ flex: 1 }} />
         {!loading && <span className="caption">{totalCount.toLocaleString()} detectors</span>}
        </div>

@@ -28,7 +28,7 @@ export interface ThreatKnowledgeMeta {
   totalPages: number
 }
 
-export async function getAllThreatKnowledge({ page, limit, search, sort, order, status, source }: { page?: number; limit?: number; search?: string; sort?: string; order?: 'asc' | 'desc'; status?: string; source?: string }): Promise<{ data: ThreatKnowledge[]; meta: ThreatKnowledgeMeta }> {
+export async function getAllThreatKnowledge({ page, limit, search, sort, order, status, source, framework_id }: { page?: number; limit?: number; search?: string; sort?: string; order?: 'asc' | 'desc'; status?: string; source?: string; framework_id?: string }): Promise<{ data: ThreatKnowledge[]; meta: ThreatKnowledgeMeta }> {
   const params = new URLSearchParams()
   if (page) params.append('page', String(page))
   if (limit) params.append('limit', String(limit))
@@ -37,6 +37,7 @@ export async function getAllThreatKnowledge({ page, limit, search, sort, order, 
   if (order) params.append('order', order)
   if (status) params.append('status', status)
   if (source) params.append('source', source)
+  if (framework_id) params.append('framework_id', framework_id)
   const res = await apiFetch<{ data: ThreatKnowledge[]; meta: ThreatKnowledgeMeta }>(
     `/api/threat-knowledge${params.toString() ? '?' + params.toString() : ''}`
   )
